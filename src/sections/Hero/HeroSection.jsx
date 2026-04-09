@@ -7,11 +7,12 @@ import React, {
   useLayoutEffect,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Text3D } from "@react-three/drei";
+import { Text3D, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import "./HeroSection.css";
 
 const FONT_URL = `${import.meta.env.BASE_URL}fonts/helvetiker_bold.typeface.json`;
+const SIGN_URL = `${import.meta.env.BASE_URL}models/neon_open_sign.glb`;
 
 class HeroCanvasErrorBoundary extends React.Component {
   constructor(props) {
@@ -74,7 +75,6 @@ function createBrickTextures() {
   ctx.fillStyle = mortarColor;
   ctx.fillRect(0, 0, width, height);
 
-  // dunklere / tiefere Basis für mehr Schattenbruch in den Fugen
   btx.fillStyle = "#707070";
   btx.fillRect(0, 0, width, height);
 
@@ -130,7 +130,6 @@ function createBrickTextures() {
   }
 
   for (let y = brickH; y < height; y += rowStep) {
-    // horizontale Fugen bewusst deutlich tiefer
     btx.fillStyle = "#3f3f3f";
     btx.fillRect(0, y, width, mortar);
 
@@ -314,94 +313,6 @@ function createSoftBeamTexture() {
   tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.needsUpdate = true;
   return tex;
-}
-
-function createNeonArrowTextures() {
-  const width = 1024;
-  const height = 1024;
-
-  const colorCanvas = document.createElement("canvas");
-  colorCanvas.width = width;
-  colorCanvas.height = height;
-  const ctx = colorCanvas.getContext("2d");
-
-  const glowCanvas = document.createElement("canvas");
-  glowCanvas.width = width;
-  glowCanvas.height = height;
-  const gtx = glowCanvas.getContext("2d");
-
-  const drawArrow = (
-    context,
-    {
-      stroke,
-      lineWidth,
-      shadowBlur = 0,
-      shadowColor = "",
-      globalAlpha = 1,
-    }
-  ) => {
-    context.save();
-    context.translate(width / 2, height / 2);
-    context.rotate(Math.PI / 2);
-    context.lineCap = "round";
-    context.lineJoin = "round";
-    context.strokeStyle = stroke;
-    context.lineWidth = lineWidth;
-    context.globalAlpha = globalAlpha;
-
-    if (shadowBlur > 0) {
-      context.shadowBlur = shadowBlur;
-      context.shadowColor = shadowColor;
-    }
-
-    context.beginPath();
-    // bewusst ohne mittlere Innenlinie, nur Außenkontur
-    context.moveTo(-206, -24);
-    context.lineTo(32, -24);
-    context.lineTo(32, -82);
-    context.lineTo(170, 0);
-    context.lineTo(32, 82);
-    context.lineTo(32, 24);
-    context.lineTo(-206, 24);
-    context.stroke();
-
-    context.restore();
-  };
-
-  ctx.clearRect(0, 0, width, height);
-  gtx.clearRect(0, 0, width, height);
-
-  // heller aber nicht breiter
-  drawArrow(gtx, {
-    stroke: "rgba(255,75,75,0.78)",
-    lineWidth: 36,
-    shadowBlur: 16,
-    shadowColor: "rgba(255,70,70,0.92)",
-  });
-
-  drawArrow(gtx, {
-    stroke: "rgba(255,110,110,0.34)",
-    lineWidth: 18,
-    shadowBlur: 7,
-    shadowColor: "rgba(255,90,90,0.62)",
-  });
-
-  drawArrow(ctx, {
-    stroke: "#ff8e8e",
-    lineWidth: 9,
-  });
-
-  const colorMap = new THREE.CanvasTexture(colorCanvas);
-  colorMap.wrapS = THREE.ClampToEdgeWrapping;
-  colorMap.wrapT = THREE.ClampToEdgeWrapping;
-  colorMap.needsUpdate = true;
-
-  const glowMap = new THREE.CanvasTexture(glowCanvas);
-  glowMap.wrapS = THREE.ClampToEdgeWrapping;
-  glowMap.wrapT = THREE.ClampToEdgeWrapping;
-  glowMap.needsUpdate = true;
-
-  return { colorMap, glowMap };
 }
 
 /* -----------------------------
@@ -685,93 +596,198 @@ function SoftBeamFloor({ pointer, powerState }) {
 }
 
 function NeonArrowSign({ visible }) {
-  const groupRef = useRef(null);
-  const frontRef = useRef(null);
-  const glowRef = useRef(null);
-  const lightRef = useRef(null);
-  const floorBounceRef = useRef(null);
-  const wallBounceRef = useRef(null);
-  const bulbRef = useRef(null);
-  const textures = useMemo(() => createNeonArrowTextures(), []);
+  const rootRef = useRef(null);
+  const signRef = useRef(null);
+  const redWallLightRef = useRef(null);
+  const redFloorLightRef = useRef(null);
+  const redFrontLightRef = useRef(null);
+
+  const { scene } = useGLTF(SIGN_URL);
+
+  const signScene = useMemo(() => {
+    const cloned = scene.clone(true);
+
+    cloned.traverse((child) => {
+      if (!child.isMesh) return;
+
+      child.castShadow = false;
+      child.receiveShadow = false;
+
+      const sourceMaterial = Array.isArray(child.material)
+        ? child.material[0]
+        : child.material;
+
+      if (!sourceMaterial) return;
+
+      const hasMap = !!sourceMaterial.map;
+      const baseColor = sourceMaterial.color
+        ? sourceMaterial.color.clone()
+        : new THREE.Color("#ffffff");
+
+      const isRedish =
+        baseColor.r > baseColor.g * 1.08 && baseColor.r > baseColor.b * 1.08;
+
+      const isVeryDark =
+        baseColor.r < 0.18 && baseColor.g < 0.18 && baseColor.b < 0.18;
+
+      let nextMaterial;
+
+      if (isRedish) {
+        nextMaterial = new THREE.MeshStandardMaterial({
+          map: hasMap ? sourceMaterial.map : null,
+          color: hasMap ? "#ffffff" : baseColor,
+          emissive: new THREE.Color("#ff5a4f"),
+          emissiveIntensity: 5.2,
+          roughness: 0.18,
+          metalness: 0.02,
+          transparent: sourceMaterial.transparent ?? false,
+          opacity: sourceMaterial.opacity ?? 1,
+          side: THREE.DoubleSide,
+        });
+      } else if (isVeryDark) {
+        nextMaterial = new THREE.MeshStandardMaterial({
+          map: hasMap ? sourceMaterial.map : null,
+          color: hasMap ? "#ffffff" : baseColor,
+          emissive: new THREE.Color("#120707"),
+          emissiveIntensity: 0.03,
+          roughness: 0.9,
+          metalness: 0,
+          transparent: sourceMaterial.transparent ?? false,
+          opacity: sourceMaterial.opacity ?? 1,
+          side: THREE.DoubleSide,
+        });
+      } else {
+        nextMaterial = new THREE.MeshStandardMaterial({
+          map: hasMap ? sourceMaterial.map : null,
+          color: hasMap ? "#ffffff" : baseColor,
+          emissive: baseColor.clone().multiplyScalar(0.24),
+          emissiveIntensity: 0.28,
+          roughness: 0.36,
+          metalness: 0.02,
+          transparent: sourceMaterial.transparent ?? false,
+          opacity: sourceMaterial.opacity ?? 1,
+          side: THREE.DoubleSide,
+        });
+      }
+
+      nextMaterial.depthWrite = true;
+      nextMaterial.toneMapped = false;
+      child.material = nextMaterial;
+    });
+
+    const box = new THREE.Box3().setFromObject(cloned);
+    const center = box.getCenter(new THREE.Vector3());
+
+    cloned.position.x -= center.x;
+    cloned.position.y -= center.y;
+    cloned.position.z -= center.z;
+
+    return cloned;
+  }, [scene]);
+
+  const scaleFactor = useMemo(() => {
+    const box = new THREE.Box3().setFromObject(signScene);
+    const size = box.getSize(new THREE.Vector3());
+
+    const targetWidth = 4.2;
+    const safeWidth = Math.max(size.x, 0.001);
+
+    return targetWidth / safeWidth;
+  }, [signScene]);
 
   useFrame((state, delta) => {
-    if (!groupRef.current) return;
+    if (!rootRef.current) return;
 
     const t = state.clock.getElapsedTime();
     const flicker =
-      visible && t < 2.3 ? (Math.sin(t * 46) > 0.12 ? 1 : 0.84) : 1;
+      visible && t < 2.2 ? (Math.sin(t * 40) > 0.08 ? 1 : 0.9) : 1;
 
-    groupRef.current.position.y = 1.28 + Math.sin(t * 2.1) * (visible ? 0.04 : 0);
-
-    groupRef.current.scale.x = THREE.MathUtils.damp(
-      groupRef.current.scale.x,
-      visible ? 4.0 : 1.2,
-      8,
-      delta
-    );
-    groupRef.current.scale.y = THREE.MathUtils.damp(
-      groupRef.current.scale.y,
-      visible ? 4.0 : 1.2,
-      8,
-      delta
-    );
-    groupRef.current.scale.z = THREE.MathUtils.damp(
-      groupRef.current.scale.z,
-      visible ? 4.0 : 1.2,
+    rootRef.current.position.y = THREE.MathUtils.damp(
+      rootRef.current.position.y,
+      visible ? 1.08 : 0.9,
       8,
       delta
     );
 
-    if (frontRef.current?.material) {
-      frontRef.current.material.opacity = THREE.MathUtils.damp(
-        frontRef.current.material.opacity,
-        visible ? 1 : 0,
+    rootRef.current.scale.x = THREE.MathUtils.damp(
+      rootRef.current.scale.x,
+      visible ? 1 : 0.82,
+      8,
+      delta
+    );
+    rootRef.current.scale.y = THREE.MathUtils.damp(
+      rootRef.current.scale.y,
+      visible ? 1 : 0.82,
+      8,
+      delta
+    );
+    rootRef.current.scale.z = THREE.MathUtils.damp(
+      rootRef.current.scale.z,
+      visible ? 1 : 0.82,
+      8,
+      delta
+    );
+
+    if (signRef.current) {
+      signRef.current.traverse((child) => {
+        if (!child.isMesh) return;
+
+        const materials = Array.isArray(child.material)
+          ? child.material
+          : [child.material];
+
+        materials.forEach((mat) => {
+          if (!mat) return;
+
+          if ("opacity" in mat) {
+            mat.opacity = THREE.MathUtils.damp(
+              mat.opacity ?? 0,
+              visible ? 1 : 0,
+              8,
+              delta
+            );
+          }
+
+          if ("emissiveIntensity" in mat && mat.emissive) {
+            const isRedish =
+              mat.emissive.r > mat.emissive.g * 1.08 &&
+              mat.emissive.r > mat.emissive.b * 1.08;
+
+            const baseTarget = isRedish ? 5.4 * flicker : 0.28;
+            mat.emissiveIntensity = THREE.MathUtils.damp(
+              mat.emissiveIntensity ?? 0,
+              visible ? baseTarget : 0,
+              8,
+              delta
+            );
+          }
+        });
+      });
+    }
+
+    if (redWallLightRef.current) {
+      redWallLightRef.current.intensity = THREE.MathUtils.damp(
+        redWallLightRef.current.intensity,
+        visible ? 3.2 * flicker : 0,
         8,
         delta
       );
     }
 
-    if (glowRef.current?.material) {
-      glowRef.current.material.opacity = THREE.MathUtils.damp(
-        glowRef.current.material.opacity,
-        visible ? 0.36 * flicker : 0,
-        7,
-        delta
-      );
-    }
-
-    if (lightRef.current) {
-      lightRef.current.intensity = THREE.MathUtils.damp(
-        lightRef.current.intensity,
-        visible ? 1.55 * flicker : 0,
+    if (redFloorLightRef.current) {
+      redFloorLightRef.current.intensity = THREE.MathUtils.damp(
+        redFloorLightRef.current.intensity,
+        visible ? 2.2 * flicker : 0,
         8,
         delta
       );
     }
 
-    if (floorBounceRef.current) {
-      floorBounceRef.current.intensity = THREE.MathUtils.damp(
-        floorBounceRef.current.intensity,
-        visible ? 2.8 * flicker : 0,
+    if (redFrontLightRef.current) {
+      redFrontLightRef.current.intensity = THREE.MathUtils.damp(
+        redFrontLightRef.current.intensity,
+        visible ? 1.8 * flicker : 0,
         8,
-        delta
-      );
-    }
-
-    if (wallBounceRef.current) {
-      wallBounceRef.current.intensity = THREE.MathUtils.damp(
-        wallBounceRef.current.intensity,
-        visible ? 1.15 * flicker : 0,
-        8,
-        delta
-      );
-    }
-
-    if (bulbRef.current?.material) {
-      bulbRef.current.material.opacity = THREE.MathUtils.damp(
-        bulbRef.current.material.opacity,
-        visible ? 0.08 * flicker : 0,
-        7,
         delta
       );
     }
@@ -779,82 +795,44 @@ function NeonArrowSign({ visible }) {
 
   return (
     <group
-      ref={groupRef}
-      position={[11.9, 1.28, -12.12]}
-      rotation={[0, -0.28, 0]}
-      scale={1.2}
-      renderOrder={10}
+      ref={rootRef}
+      position={[11.9, 1.08, -11.62]}
+      rotation={[0, Math.PI + 0.22, 0]}
+      scale={0.82}
     >
-      <mesh ref={glowRef} position={[0, 0, -0.12]} renderOrder={10}>
-        <planeGeometry args={[2.25, 2.25]} />
-        <meshBasicMaterial
-          map={textures.glowMap}
-          transparent
-          opacity={0}
-          depthWrite={false}
-          depthTest={false}
-          blending={THREE.AdditiveBlending}
-          color="#ff5d5d"
-        />
-      </mesh>
-
-      <mesh
-        ref={frontRef}
-        position={[0, 0, 0.03]}
-        castShadow={false}
-        receiveShadow={false}
-        renderOrder={11}
+      <group
+        ref={signRef}
+        scale={[scaleFactor, scaleFactor, scaleFactor]}
+        position={[0, 0, 0]}
       >
-        <planeGeometry args={[2.18, 2.18]} />
-        <meshBasicMaterial
-          map={textures.colorMap}
-          transparent
-          opacity={0}
-          depthWrite={false}
-          depthTest={false}
-          color="#ffffff"
-        />
-      </mesh>
-
-      <mesh position={[0, 0, 0.12]}>
-        <boxGeometry args={[0.03, 0.36, 0.03]} />
-        <meshStandardMaterial
-          color="#9a9a9a"
-          roughness={0.8}
-          metalness={0.12}
-        />
-      </mesh>
-
-      <mesh ref={bulbRef} position={[0, -0.18, 0.18]}>
-        <sphereGeometry args={[0.06, 18, 18]} />
-        <meshBasicMaterial color="#ff6a6a" transparent opacity={0} />
-      </mesh>
+        <primitive object={signScene} />
+      </group>
 
       <pointLight
-        ref={lightRef}
-        position={[0, 0, 0.34]}
-        color="#ff5757"
-        intensity={0}
-        distance={10}
-        decay={1.8}
-      />
-
-      <pointLight
-        ref={floorBounceRef}
-        position={[0, -0.8, 1.2]}
+        ref={redWallLightRef}
+        position={[0, 0, -0.55]}
         color="#ff4d4d"
         intensity={0}
-        distance={16}
-        decay={1.2}
+        distance={12}
+        decay={1.28}
       />
 
       <pointLight
-        ref={wallBounceRef}
-        position={[0, 0.15, -0.35]}
-        color="#ff6565"
+        ref={redFloorLightRef}
+        position={[0, -0.78, 0.42]}
+        color="#ff4d4d"
         intensity={0}
-        distance={8}
-        decay={1.55}
+        distance={11}
+        decay={1.25}
+      />
+
+      <pointLight
+        ref={redFrontLightRef}
+        position={[0, 0.02, 0.46]}
+        color="#ff7866"
+        intensity={0}
+        distance={9}
+        decay={1.6}
       />
     </group>
   );
@@ -1383,3 +1361,5 @@ export default function HeroSection() {
     </section>
   );
 }
+
+useGLTF.preload(SIGN_URL);
