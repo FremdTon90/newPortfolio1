@@ -69,13 +69,16 @@ function createBrickTextures() {
   dispCanvas.height = height;
   const dtx = dispCanvas.getContext("2d");
 
-  ctx.fillStyle = "#140809";
+  const mortarColor = "#140809";
+
+  ctx.fillStyle = mortarColor;
   ctx.fillRect(0, 0, width, height);
 
-  btx.fillStyle = "#6c6c6c";
+  // dunklere / tiefere Basis für mehr Schattenbruch in den Fugen
+  btx.fillStyle = "#707070";
   btx.fillRect(0, 0, width, height);
 
-  dtx.fillStyle = "#4a4a4a";
+  dtx.fillStyle = "#575757";
   dtx.fillRect(0, 0, width, height);
 
   const brickW = 128;
@@ -99,7 +102,7 @@ function createBrickTextures() {
       ctx.fillStyle = "rgba(255,220,210,0.035)";
       ctx.fillRect(px, y, brickW, 4);
 
-      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      ctx.fillStyle = "rgba(0,0,0,0.24)";
       ctx.fillRect(px, y + brickH - 6, brickW, 6);
 
       for (let i = 0; i < 18; i++) {
@@ -110,27 +113,28 @@ function createBrickTextures() {
         ctx.fillRect(nx, ny, 2, 2);
       }
 
-      btx.fillStyle = "#d7d7d7";
+      btx.fillStyle = "#e2e2e2";
       btx.fillRect(px, y, brickW, brickH);
-      btx.fillStyle = "#efefef";
+      btx.fillStyle = "#f4f4f4";
       btx.fillRect(px + 1, y + 1, brickW - 2, 2);
-      btx.fillStyle = "#939393";
+      btx.fillStyle = "#999999";
       btx.fillRect(px, y + brickH - 3, brickW, 3);
 
-      dtx.fillStyle = "#ececec";
+      dtx.fillStyle = "#f3f3f3";
       dtx.fillRect(px, y, brickW, brickH);
-      dtx.fillStyle = "#fafafa";
+      dtx.fillStyle = "#fbfbfb";
       dtx.fillRect(px + 1, y + 1, brickW - 2, 2);
-      dtx.fillStyle = "#9a9a9a";
+      dtx.fillStyle = "#a0a0a0";
       dtx.fillRect(px, y + brickH - 3, brickW, 3);
     }
   }
 
   for (let y = brickH; y < height; y += rowStep) {
-    btx.fillStyle = "#5e5e5e";
+    // horizontale Fugen bewusst deutlich tiefer
+    btx.fillStyle = "#3f3f3f";
     btx.fillRect(0, y, width, mortar);
 
-    dtx.fillStyle = "#343434";
+    dtx.fillStyle = "#161616";
     dtx.fillRect(0, y, width, mortar);
   }
 
@@ -152,7 +156,7 @@ function createBrickTextures() {
   displacementMap.repeat.set(1, 1);
   displacementMap.anisotropy = 8;
 
-  return { colorMap, bumpMap, displacementMap };
+  return { colorMap, bumpMap, displacementMap, mortarColor };
 }
 
 function createCheckerFloorTextures() {
@@ -174,17 +178,19 @@ function createCheckerFloorTextures() {
   dispCanvas.height = height;
   const dtx = dispCanvas.getContext("2d");
 
-  ctx.fillStyle = "#0a0d11";
+  const groutColor = "#140809";
+
+  ctx.fillStyle = groutColor;
   ctx.fillRect(0, 0, width, height);
 
-  btx.fillStyle = "#7d7d7d";
+  btx.fillStyle = "#9d9d9d";
   btx.fillRect(0, 0, width, height);
 
-  dtx.fillStyle = "#626262";
+  dtx.fillStyle = "#909090";
   dtx.fillRect(0, 0, width, height);
 
-  const tile = 140;
-  const grout = 10;
+  const tile = 105;
+  const grout = 5;
   const cols = Math.ceil(width / tile);
   const rows = Math.ceil(height / tile);
 
@@ -194,37 +200,61 @@ function createCheckerFloorTextures() {
       const y = row * tile;
 
       const isLight = (row + col) % 2 === 0;
-      const shade = isLight ? 72 + Math.random() * 3 : 18 + Math.random() * 3;
+      const shade = isLight ? 76 + Math.random() * 4 : 16 + Math.random() * 3.5;
+
+      const tileX = x + grout / 2;
+      const tileY = y + grout / 2;
+      const tileW = tile - grout;
+      const tileH = tile - grout;
 
       ctx.fillStyle = `hsl(0 0% ${shade}%)`;
-      ctx.fillRect(x + grout / 2, y + grout / 2, tile - grout, tile - grout);
+      ctx.fillRect(tileX, tileY, tileW, tileH);
 
-      ctx.fillStyle = "rgba(255,255,255,0.04)";
-      ctx.fillRect(x + grout / 2, y + grout / 2, tile - grout, 2);
+      const topGrad = ctx.createLinearGradient(tileX, tileY, tileX, tileY + 18);
+      topGrad.addColorStop(0, "rgba(255,255,255,0.12)");
+      topGrad.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = topGrad;
+      ctx.fillRect(tileX, tileY, tileW, 18);
 
-      ctx.fillStyle = "rgba(0,0,0,0.22)";
-      ctx.fillRect(x + grout / 2, y + tile - grout - 3, tile - grout, 3);
-      ctx.fillRect(x + tile - grout - 3, y + grout / 2, 3, tile - grout);
+      const diagGrad = ctx.createLinearGradient(
+        tileX,
+        tileY,
+        tileX + tileW,
+        tileY + tileH
+      );
+      diagGrad.addColorStop(0.16, "rgba(255,255,255,0)");
+      diagGrad.addColorStop(0.44, "rgba(255,255,255,0.075)");
+      diagGrad.addColorStop(0.56, "rgba(255,255,255,0.03)");
+      diagGrad.addColorStop(0.78, "rgba(255,255,255,0)");
+      ctx.fillStyle = diagGrad;
+      ctx.fillRect(tileX, tileY, tileW, tileH);
 
-      for (let i = 0; i < 18; i++) {
-        const nx = x + grout / 2 + Math.random() * (tile - grout);
-        const ny = y + grout / 2 + Math.random() * (tile - grout);
-        const a = 0.008 + Math.random() * 0.016;
+      ctx.fillStyle = "rgba(255,255,255,0.07)";
+      ctx.fillRect(tileX, tileY, tileW, 2);
+
+      ctx.fillStyle = "rgba(0,0,0,0.14)";
+      ctx.fillRect(tileX, tileY + tileH - 2, tileW, 2);
+      ctx.fillRect(tileX + tileW - 2, tileY, 2, tileH);
+
+      for (let i = 0; i < 16; i++) {
+        const nx = tileX + Math.random() * tileW;
+        const ny = tileY + Math.random() * tileH;
+        const a = 0.007 + Math.random() * 0.014;
         ctx.fillStyle = `rgba(255,255,255,${a})`;
         ctx.fillRect(nx, ny, 2, 2);
       }
 
-      btx.fillStyle = "#e2e2e2";
-      btx.fillRect(x + grout / 2, y + grout / 2, tile - grout, tile - grout);
+      btx.fillStyle = "#d8d8d8";
+      btx.fillRect(tileX, tileY, tileW, tileH);
 
-      btx.fillStyle = "#505050";
+      btx.fillStyle = "#8b8b8b";
       btx.fillRect(x, y, tile, grout);
       btx.fillRect(x, y, grout, tile);
 
-      dtx.fillStyle = "#f6f6f6";
-      dtx.fillRect(x + grout / 2, y + grout / 2, tile - grout, tile - grout);
+      dtx.fillStyle = "#e8e8e8";
+      dtx.fillRect(tileX, tileY, tileW, tileH);
 
-      dtx.fillStyle = "#262626";
+      dtx.fillStyle = "#7c7c7c";
       dtx.fillRect(x, y, tile, grout);
       dtx.fillRect(x, y, grout, tile);
     }
@@ -261,16 +291,18 @@ function createSoftBeamTexture() {
   const gradient = ctx.createRadialGradient(
     size / 2,
     size / 2,
-    size * 0.03,
+    size * 0.015,
     size / 2,
     size / 2,
     size * 0.5
   );
 
-  gradient.addColorStop(0, "rgba(255,255,255,0.38)");
-  gradient.addColorStop(0.16, "rgba(255,255,255,0.22)");
-  gradient.addColorStop(0.36, "rgba(255,255,255,0.11)");
-  gradient.addColorStop(0.66, "rgba(255,255,255,0.04)");
+  gradient.addColorStop(0, "rgba(255,255,255,0.16)");
+  gradient.addColorStop(0.06, "rgba(255,255,255,0.145)");
+  gradient.addColorStop(0.16, "rgba(255,255,255,0.12)");
+  gradient.addColorStop(0.32, "rgba(255,255,255,0.082)");
+  gradient.addColorStop(0.58, "rgba(255,255,255,0.034)");
+  gradient.addColorStop(0.82, "rgba(255,255,255,0.012)");
   gradient.addColorStop(1, "rgba(255,255,255,0)");
 
   ctx.clearRect(0, 0, size, size);
@@ -298,7 +330,16 @@ function createNeonArrowTextures() {
   glowCanvas.height = height;
   const gtx = glowCanvas.getContext("2d");
 
-  const drawArrow = (context, stroke, lineWidth, shadowBlur = 0, shadowColor = "") => {
+  const drawArrow = (
+    context,
+    {
+      stroke,
+      lineWidth,
+      shadowBlur = 0,
+      shadowColor = "",
+      globalAlpha = 1,
+    }
+  ) => {
     context.save();
     context.translate(width / 2, height / 2);
     context.rotate(Math.PI / 2);
@@ -306,19 +347,22 @@ function createNeonArrowTextures() {
     context.lineJoin = "round";
     context.strokeStyle = stroke;
     context.lineWidth = lineWidth;
+    context.globalAlpha = globalAlpha;
+
     if (shadowBlur > 0) {
       context.shadowBlur = shadowBlur;
       context.shadowColor = shadowColor;
     }
 
     context.beginPath();
-    context.moveTo(-220, -40);
-    context.lineTo(50, -40);
-    context.lineTo(50, -120);
-    context.lineTo(250, 0);
-    context.lineTo(50, 120);
-    context.lineTo(50, 40);
-    context.lineTo(-220, 40);
+    // bewusst ohne mittlere Innenlinie, nur Außenkontur
+    context.moveTo(-206, -24);
+    context.lineTo(32, -24);
+    context.lineTo(32, -82);
+    context.lineTo(170, 0);
+    context.lineTo(32, 82);
+    context.lineTo(32, 24);
+    context.lineTo(-206, 24);
     context.stroke();
 
     context.restore();
@@ -327,11 +371,25 @@ function createNeonArrowTextures() {
   ctx.clearRect(0, 0, width, height);
   gtx.clearRect(0, 0, width, height);
 
-  drawArrow(gtx, "rgba(255,50,50,0.78)", 110, 72, "rgba(255,20,20,0.98)");
-  drawArrow(gtx, "rgba(255,80,80,0.52)", 64, 34, "rgba(255,40,40,0.85)");
+  // heller aber nicht breiter
+  drawArrow(gtx, {
+    stroke: "rgba(255,75,75,0.78)",
+    lineWidth: 36,
+    shadowBlur: 16,
+    shadowColor: "rgba(255,70,70,0.92)",
+  });
 
-  drawArrow(ctx, "#ff3a3a", 38);
-  drawArrow(ctx, "#ffe0e0", 16);
+  drawArrow(gtx, {
+    stroke: "rgba(255,110,110,0.34)",
+    lineWidth: 18,
+    shadowBlur: 7,
+    shadowColor: "rgba(255,90,90,0.62)",
+  });
+
+  drawArrow(ctx, {
+    stroke: "#ff8e8e",
+    lineWidth: 9,
+  });
 
   const colorMap = new THREE.CanvasTexture(colorCanvas);
   colorMap.wrapS = THREE.ClampToEdgeWrapping;
@@ -374,7 +432,7 @@ function BrickMaterial({
             : 0.02;
     }
 
-    if (powerState === "lamp") emissiveIntensity = 0.035;
+    if (powerState === "lamp") emissiveIntensity = 0.04;
 
     materialRef.current.emissiveIntensity = emissiveIntensity;
   });
@@ -384,12 +442,12 @@ function BrickMaterial({
       ref={materialRef}
       map={textures.colorMap}
       bumpMap={textures.bumpMap}
-      bumpScale={0.16}
+      bumpScale={0.36}
       displacementMap={textures.displacementMap}
-      displacementScale={0.22}
-      displacementBias={-0.008}
+      displacementScale={0.52}
+      displacementBias={-0.03}
       color={color}
-      roughness={1}
+      roughness={0.96}
       metalness={0}
       emissive={emissive}
       emissiveIntensity={0.12}
@@ -438,7 +496,7 @@ function SideWalls({ powerState }) {
               : 0.012;
       }
 
-      if (powerState === "lamp") emissiveIntensity = 0.02;
+      if (powerState === "lamp") emissiveIntensity = 0.024;
 
       mat.emissiveIntensity = emissiveIntensity;
     });
@@ -456,12 +514,12 @@ function SideWalls({ powerState }) {
           ref={leftRef}
           map={textures.colorMap}
           bumpMap={textures.bumpMap}
-          bumpScale={0.14}
+          bumpScale={0.34}
           displacementMap={textures.displacementMap}
-          displacementScale={0.18}
-          displacementBias={-0.008}
+          displacementScale={0.48}
+          displacementBias={-0.03}
           color="#9f625c"
-          roughness={1}
+          roughness={0.97}
           metalness={0}
           emissive="#241011"
           emissiveIntensity={0.06}
@@ -479,12 +537,12 @@ function SideWalls({ powerState }) {
           ref={rightRef}
           map={textures.colorMap}
           bumpMap={textures.bumpMap}
-          bumpScale={0.14}
+          bumpScale={0.34}
           displacementMap={textures.displacementMap}
-          displacementScale={0.18}
-          displacementBias={-0.008}
+          displacementScale={0.48}
+          displacementBias={-0.03}
           color="#9f625c"
-          roughness={1}
+          roughness={0.97}
           metalness={0}
           emissive="#241011"
           emissiveIntensity={0.06}
@@ -508,16 +566,17 @@ function Floor() {
       <meshPhysicalMaterial
         map={tile.colorMap}
         bumpMap={tile.bumpMap}
-        bumpScale={0.32}
+        bumpScale={0.17}
         displacementMap={tile.displacementMap}
-        displacementScale={0.18}
-        displacementBias={-0.026}
+        displacementScale={0.06}
+        displacementBias={-0.008}
         color="#ffffff"
-        roughness={0.18}
+        roughness={0.04}
         metalness={0}
         clearcoat={1}
-        clearcoatRoughness={0.12}
-        reflectivity={0.95}
+        clearcoatRoughness={0.02}
+        reflectivity={1}
+        ior={1.52}
       />
     </mesh>
   );
@@ -536,34 +595,35 @@ function SoftBeamWall({ pointer, powerState }) {
     beamRef.current.position.x = THREE.MathUtils.damp(
       beamRef.current.position.x,
       targetX,
-      8,
+      5,
       delta
     );
     beamRef.current.position.y = THREE.MathUtils.damp(
       beamRef.current.position.y,
       targetY,
-      8,
+      5,
       delta
     );
-    beamRef.current.position.z = -12.68;
+    beamRef.current.position.z = -12.66;
 
     const targetOpacity = powerState === "lamp" ? 0.16 : 0;
     beamRef.current.material.opacity = THREE.MathUtils.damp(
       beamRef.current.material.opacity,
       targetOpacity,
-      7,
+      4.5,
       delta
     );
   });
 
   return (
-    <mesh ref={beamRef} position={[0, 0, -12.68]} renderOrder={2}>
-      <planeGeometry args={[11.8, 11.8]} />
+    <mesh ref={beamRef} position={[0, 0, -12.66]} renderOrder={1}>
+      <planeGeometry args={[12.6, 12.6]} />
       <meshBasicMaterial
         map={beamTexture}
         transparent
         opacity={0}
         depthWrite={false}
+        depthTest={false}
         blending={THREE.AdditiveBlending}
         color="#eefaff"
       />
@@ -578,27 +638,27 @@ function SoftBeamFloor({ pointer, powerState }) {
   useFrame((_, delta) => {
     if (!beamRef.current) return;
 
-    const targetX = THREE.MathUtils.clamp(pointer.x * 5.2, -5.2, 5.2);
-    const targetZ = THREE.MathUtils.clamp(pointer.y * 1.6, -2.8, 1.2);
+    const targetX = THREE.MathUtils.clamp(pointer.x * 5.5, -5.5, 5.5);
+    const targetZ = THREE.MathUtils.clamp(pointer.y * 1.7, -3.1, 1.5);
 
     beamRef.current.position.x = THREE.MathUtils.damp(
       beamRef.current.position.x,
       targetX,
-      8,
+      5,
       delta
     );
     beamRef.current.position.z = THREE.MathUtils.damp(
       beamRef.current.position.z,
-      -1.8 + targetZ,
-      8,
+      -1.9 + targetZ,
+      5,
       delta
     );
 
-    const targetOpacity = powerState === "lamp" ? 0.12 : 0;
+    const targetOpacity = powerState === "lamp" ? 0.115 : 0;
     beamRef.current.material.opacity = THREE.MathUtils.damp(
       beamRef.current.material.opacity,
       targetOpacity,
-      7,
+      4.5,
       delta
     );
   });
@@ -608,14 +668,15 @@ function SoftBeamFloor({ pointer, powerState }) {
       ref={beamRef}
       position={[0, -6.02, -1.8]}
       rotation={[-Math.PI / 2, 0, 0]}
-      renderOrder={2}
+      renderOrder={1}
     >
-      <planeGeometry args={[11, 8.4]} />
+      <planeGeometry args={[12.2, 9.6]} />
       <meshBasicMaterial
         map={beamTexture}
         transparent
         opacity={0}
         depthWrite={false}
+        depthTest={false}
         blending={THREE.AdditiveBlending}
         color="#f0f8ff"
       />
@@ -628,6 +689,9 @@ function NeonArrowSign({ visible }) {
   const frontRef = useRef(null);
   const glowRef = useRef(null);
   const lightRef = useRef(null);
+  const floorBounceRef = useRef(null);
+  const wallBounceRef = useRef(null);
+  const bulbRef = useRef(null);
   const textures = useMemo(() => createNeonArrowTextures(), []);
 
   useFrame((state, delta) => {
@@ -635,26 +699,26 @@ function NeonArrowSign({ visible }) {
 
     const t = state.clock.getElapsedTime();
     const flicker =
-      visible && t < 2.3 ? (Math.sin(t * 46) > 0.12 ? 1 : 0.76) : 1;
+      visible && t < 2.3 ? (Math.sin(t * 46) > 0.12 ? 1 : 0.84) : 1;
 
     groupRef.current.position.y = 1.28 + Math.sin(t * 2.1) * (visible ? 0.04 : 0);
 
     groupRef.current.scale.x = THREE.MathUtils.damp(
       groupRef.current.scale.x,
-      visible ? 2.0 : 1.15,
-      9,
+      visible ? 4.0 : 1.2,
+      8,
       delta
     );
     groupRef.current.scale.y = THREE.MathUtils.damp(
       groupRef.current.scale.y,
-      visible ? 2.0 : 1.15,
-      9,
+      visible ? 4.0 : 1.2,
+      8,
       delta
     );
     groupRef.current.scale.z = THREE.MathUtils.damp(
       groupRef.current.scale.z,
-      visible ? 2.0 : 1.15,
-      9,
+      visible ? 4.0 : 1.2,
+      8,
       delta
     );
 
@@ -662,7 +726,7 @@ function NeonArrowSign({ visible }) {
       frontRef.current.material.opacity = THREE.MathUtils.damp(
         frontRef.current.material.opacity,
         visible ? 1 : 0,
-        9,
+        8,
         delta
       );
     }
@@ -671,7 +735,7 @@ function NeonArrowSign({ visible }) {
       glowRef.current.material.opacity = THREE.MathUtils.damp(
         glowRef.current.material.opacity,
         visible ? 0.36 * flicker : 0,
-        8,
+        7,
         delta
       );
     }
@@ -679,8 +743,35 @@ function NeonArrowSign({ visible }) {
     if (lightRef.current) {
       lightRef.current.intensity = THREE.MathUtils.damp(
         lightRef.current.intensity,
-        visible ? 2.3 * flicker : 0,
-        10,
+        visible ? 1.55 * flicker : 0,
+        8,
+        delta
+      );
+    }
+
+    if (floorBounceRef.current) {
+      floorBounceRef.current.intensity = THREE.MathUtils.damp(
+        floorBounceRef.current.intensity,
+        visible ? 2.8 * flicker : 0,
+        8,
+        delta
+      );
+    }
+
+    if (wallBounceRef.current) {
+      wallBounceRef.current.intensity = THREE.MathUtils.damp(
+        wallBounceRef.current.intensity,
+        visible ? 1.15 * flicker : 0,
+        8,
+        delta
+      );
+    }
+
+    if (bulbRef.current?.material) {
+      bulbRef.current.material.opacity = THREE.MathUtils.damp(
+        bulbRef.current.material.opacity,
+        visible ? 0.08 * flicker : 0,
+        7,
         delta
       );
     }
@@ -689,29 +780,38 @@ function NeonArrowSign({ visible }) {
   return (
     <group
       ref={groupRef}
-      position={[11.9, 1.28, -12.18]}
+      position={[11.9, 1.28, -12.12]}
       rotation={[0, -0.28, 0]}
-      scale={1.15}
+      scale={1.2}
+      renderOrder={10}
     >
-      <mesh ref={glowRef} position={[0, 0, -0.14]} renderOrder={3}>
-        <planeGeometry args={[2.8, 2.8]} />
+      <mesh ref={glowRef} position={[0, 0, -0.12]} renderOrder={10}>
+        <planeGeometry args={[2.25, 2.25]} />
         <meshBasicMaterial
           map={textures.glowMap}
           transparent
           opacity={0}
           depthWrite={false}
+          depthTest={false}
           blending={THREE.AdditiveBlending}
-          color="#ff3d3d"
+          color="#ff5d5d"
         />
       </mesh>
 
-      <mesh ref={frontRef} position={[0, 0, 0.02]} castShadow receiveShadow renderOrder={4}>
-        <planeGeometry args={[2.7, 2.7]} />
+      <mesh
+        ref={frontRef}
+        position={[0, 0, 0.03]}
+        castShadow={false}
+        receiveShadow={false}
+        renderOrder={11}
+      >
+        <planeGeometry args={[2.18, 2.18]} />
         <meshBasicMaterial
           map={textures.colorMap}
           transparent
           opacity={0}
           depthWrite={false}
+          depthTest={false}
           color="#ffffff"
         />
       </mesh>
@@ -725,13 +825,36 @@ function NeonArrowSign({ visible }) {
         />
       </mesh>
 
+      <mesh ref={bulbRef} position={[0, -0.18, 0.18]}>
+        <sphereGeometry args={[0.06, 18, 18]} />
+        <meshBasicMaterial color="#ff6a6a" transparent opacity={0} />
+      </mesh>
+
       <pointLight
         ref={lightRef}
-        position={[0, 0, 0.35]}
-        color="#ff3a3a"
+        position={[0, 0, 0.34]}
+        color="#ff5757"
         intensity={0}
-        distance={9}
+        distance={10}
         decay={1.8}
+      />
+
+      <pointLight
+        ref={floorBounceRef}
+        position={[0, -0.8, 1.2]}
+        color="#ff4d4d"
+        intensity={0}
+        distance={16}
+        decay={1.2}
+      />
+
+      <pointLight
+        ref={wallBounceRef}
+        position={[0, 0.15, -0.35]}
+        color="#ff6565"
+        intensity={0}
+        distance={8}
+        decay={1.55}
       />
     </group>
   );
@@ -765,16 +888,19 @@ function TextBlock({ powerState, introProgress }) {
   const lineY3 = -1.95;
   const wordGap = 0.46;
 
-  const baseColor = powerState === "lamp" ? "#d7d5d1" : "#e2e8f4";
-  const accentColor = powerState === "lamp" ? "#7ce6f5" : "#9bf6ff";
-  const baseEmissive = powerState === "lamp" ? "#0b1220" : "#1b2d49";
-  const baseEmissiveIntensity = powerState === "lamp" ? 0.018 : 0.07;
-  const accentEmissiveIntensity = powerState === "lamp" ? 0.11 : 0.22;
+  const baseColor = powerState === "lamp" ? "#f1f1f1" : "#e2e8f4";
+  const accentColor = powerState === "lamp" ? "#66dff0" : "#9bf6ff";
+  const baseEmissive = powerState === "lamp" ? "#0a1320" : "#1b2d49";
+  const baseEmissiveIntensity = powerState === "lamp" ? 0.038 : 0.08;
+  const accentEmissiveIntensity = powerState === "lamp" ? 0.17 : 0.24;
 
   const sharedMaterial = useMemo(
     () => ({
-      roughness: 0.94,
-      metalness: 0,
+      roughness: 0.38,
+      metalness: 0.03,
+      clearcoat: 1,
+      clearcoatRoughness: 0.045,
+      reflectivity: 1,
     }),
     []
   );
@@ -820,11 +946,11 @@ function TextBlock({ powerState, introProgress }) {
           ref={dustinRef}
           font={FONT_URL}
           size={1.18}
-          height={0.34}
+          height={0.51}
           curveSegments={10}
           bevelEnabled
-          bevelThickness={0.02}
-          bevelSize={0.018}
+          bevelThickness={0.022}
+          bevelSize={0.02}
           bevelOffset={0}
           bevelSegments={5}
           scale={[1.08, 1, 1]}
@@ -832,7 +958,7 @@ function TextBlock({ powerState, introProgress }) {
           receiveShadow
         >
           Dustin
-          <meshStandardMaterial
+          <meshPhysicalMaterial
             color={baseColor}
             emissive={baseEmissive}
             emissiveIntensity={baseEmissiveIntensity}
@@ -846,11 +972,11 @@ function TextBlock({ powerState, introProgress }) {
           ref={buildsRef}
           font={FONT_URL}
           size={1.02}
-          height={0.3}
+          height={0.45}
           curveSegments={10}
           bevelEnabled
-          bevelThickness={0.018}
-          bevelSize={0.016}
+          bevelThickness={0.02}
+          bevelSize={0.017}
           bevelOffset={0}
           bevelSegments={5}
           scale={[1.08, 1, 1]}
@@ -858,7 +984,7 @@ function TextBlock({ powerState, introProgress }) {
           receiveShadow
         >
           builds
-          <meshStandardMaterial
+          <meshPhysicalMaterial
             color={baseColor}
             emissive={baseEmissive}
             emissiveIntensity={baseEmissiveIntensity}
@@ -872,11 +998,11 @@ function TextBlock({ powerState, introProgress }) {
           ref={digitalRef}
           font={FONT_URL}
           size={1.02}
-          height={0.3}
+          height={0.45}
           curveSegments={10}
           bevelEnabled
-          bevelThickness={0.018}
-          bevelSize={0.016}
+          bevelThickness={0.02}
+          bevelSize={0.017}
           bevelOffset={0}
           bevelSegments={5}
           scale={[1.08, 1, 1]}
@@ -884,12 +1010,15 @@ function TextBlock({ powerState, introProgress }) {
           receiveShadow
         >
           digital
-          <meshStandardMaterial
+          <meshPhysicalMaterial
             color={accentColor}
             emissive="#57e9ff"
             emissiveIntensity={accentEmissiveIntensity}
-            roughness={0.9}
-            metalness={0}
+            roughness={0.3}
+            metalness={0.03}
+            clearcoat={1}
+            clearcoatRoughness={0.04}
+            reflectivity={1}
           />
         </Text3D>
       </group>
@@ -899,11 +1028,11 @@ function TextBlock({ powerState, introProgress }) {
           ref={expRef}
           font={FONT_URL}
           size={1.18}
-          height={0.34}
+          height={0.51}
           curveSegments={10}
           bevelEnabled
-          bevelThickness={0.02}
-          bevelSize={0.018}
+          bevelThickness={0.022}
+          bevelSize={0.02}
           bevelOffset={0}
           bevelSegments={5}
           scale={[1.08, 1, 1]}
@@ -911,7 +1040,7 @@ function TextBlock({ powerState, introProgress }) {
           receiveShadow
         >
           Experiences.
-          <meshStandardMaterial
+          <meshPhysicalMaterial
             color={baseColor}
             emissive={baseEmissive}
             emissiveIntensity={baseEmissiveIntensity}
@@ -966,7 +1095,7 @@ function PowerLights({ powerState, pointer, showArrow }) {
               : 0.015;
       }
 
-      if (powerState === "lamp") ambient = 0.022;
+      if (powerState === "lamp") ambient = 0.028;
 
       ambientRef.current.intensity = ambient;
     }
@@ -985,7 +1114,7 @@ function PowerLights({ powerState, pointer, showArrow }) {
               : 0.04;
       }
 
-      if (powerState === "lamp") fill = 0.045;
+      if (powerState === "lamp") fill = 0.055;
 
       wallWashRef.current.intensity = fill;
     }
@@ -995,18 +1124,18 @@ function PowerLights({ powerState, pointer, showArrow }) {
       const targetY = THREE.MathUtils.clamp(pointer.y * 6.5, -6.5, 6.5);
 
       const lampX = THREE.MathUtils.clamp(pointer.x * 1.8, -1.8, 1.8);
-      const lampY = THREE.MathUtils.clamp(pointer.y * 1.2, -1.2, 1.2) + 0.3;
+      const lampY = THREE.MathUtils.clamp(pointer.y * 1.2, -1.2, 1.2) + 0.35;
 
       spotTarget.position.x = THREE.MathUtils.damp(
         spotTarget.position.x,
         targetX,
-        16,
+        10,
         delta
       );
       spotTarget.position.y = THREE.MathUtils.damp(
         spotTarget.position.y,
         targetY,
-        16,
+        10,
         delta
       );
       spotTarget.position.z = -12.75;
@@ -1015,30 +1144,30 @@ function PowerLights({ powerState, pointer, showArrow }) {
       spotRef.current.position.x = THREE.MathUtils.damp(
         spotRef.current.position.x,
         lampX,
-        16,
+        10,
         delta
       );
       spotRef.current.position.y = THREE.MathUtils.damp(
         spotRef.current.position.y,
         lampY,
-        16,
+        10,
         delta
       );
       spotRef.current.position.z = 11.8;
 
       spotRef.current.target = spotTarget;
-      spotRef.current.intensity = powerState === "lamp" ? 920 : 0;
-      spotRef.current.angle = 0.24;
-      spotRef.current.penumbra = 0.92;
-      spotRef.current.distance = 92;
-      spotRef.current.decay = 1.04;
+      spotRef.current.intensity = powerState === "lamp" ? 980 : 0;
+      spotRef.current.angle = 0.28;
+      spotRef.current.penumbra = 1;
+      spotRef.current.distance = 98;
+      spotRef.current.decay = 1;
 
       spotRef.current.shadow.camera.near = 6;
-      spotRef.current.shadow.camera.far = 40;
+      spotRef.current.shadow.camera.far = 42;
       spotRef.current.shadow.focus = 1;
       spotRef.current.shadow.bias = -0.00012;
       spotRef.current.shadow.normalBias = 0.02;
-      spotRef.current.shadow.radius = 1.1;
+      spotRef.current.shadow.radius = 3.2;
       spotRef.current.shadow.needsUpdate = true;
       spotRef.current.shadow.camera.updateProjectionMatrix();
 
@@ -1049,7 +1178,7 @@ function PowerLights({ powerState, pointer, showArrow }) {
     edgeTarget.updateMatrixWorld(true);
 
     if (neonBounceRef.current) {
-      const target = showArrow ? 0.78 : 0;
+      const target = showArrow ? 1.18 : 0;
       neonBounceRef.current.intensity = THREE.MathUtils.damp(
         neonBounceRef.current.intensity,
         target,
@@ -1059,7 +1188,7 @@ function PowerLights({ powerState, pointer, showArrow }) {
     }
 
     if (neonEdgeRef.current) {
-      const target = showArrow ? 145 : 0;
+      const target = showArrow ? 118 : 0;
       neonEdgeRef.current.intensity = THREE.MathUtils.damp(
         neonEdgeRef.current.intensity,
         target,
@@ -1084,11 +1213,11 @@ function PowerLights({ powerState, pointer, showArrow }) {
 
       <pointLight
         ref={neonBounceRef}
-        position={[11.55, 1.25, -11.25]}
+        position={[11.45, 0.48, -10.85]}
         color="#ff3b3b"
         intensity={0}
-        distance={9.5}
-        decay={1.8}
+        distance={15}
+        decay={1.38}
       />
 
       <spotLight
@@ -1096,15 +1225,15 @@ function PowerLights({ powerState, pointer, showArrow }) {
         position={[9.8, 0.95, -10.6]}
         color="#ff4545"
         intensity={0}
-        angle={0.17}
+        angle={0.12}
         penumbra={1}
-        distance={22}
-        decay={1.6}
+        distance={18}
+        decay={1.55}
       />
 
       <spotLight
         ref={spotRef}
-        position={[0, 0.3, 11.8]}
+        position={[0, 0.35, 11.8]}
         color="#f4fcff"
         castShadow
         shadow-mapSize-width={4096}
@@ -1126,7 +1255,11 @@ function Scene({ powerState, pointer, introProgress, showArrow }) {
       <SoftBeamWall pointer={pointer} powerState={powerState} />
       <SoftBeamFloor pointer={pointer} powerState={powerState} />
       <NeonArrowSign visible={showArrow} />
-      <PowerLights powerState={powerState} pointer={pointer} showArrow={showArrow} />
+      <PowerLights
+        powerState={powerState}
+        pointer={pointer}
+        showArrow={showArrow}
+      />
       <TextBlock powerState={powerState} introProgress={introProgress} />
     </>
   );
