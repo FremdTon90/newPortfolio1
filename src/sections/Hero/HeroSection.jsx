@@ -11,6 +11,8 @@ export default function HeroSection() {
 
     if (!hero || !copy) return;
 
+    let lampModeTimeout;
+
     const updatePointerVars = (e) => {
       const heroRect = hero.getBoundingClientRect();
       const copyRect = copy.getBoundingClientRect();
@@ -28,10 +30,36 @@ export default function HeroSection() {
       copy.style.setProperty("--copy-mouse-y", `${copyY}px`);
     };
 
+    const setInitialPointerPosition = () => {
+      const heroRect = hero.getBoundingClientRect();
+      const copyRect = copy.getBoundingClientRect();
+
+      const heroCenterX = heroRect.width / 2;
+      const heroCenterY = heroRect.height / 2;
+
+      const copyCenterX = copyRect.width / 2;
+      const copyCenterY = copyRect.height / 2;
+
+      hero.style.setProperty("--mouse-x", `${(heroCenterX / heroRect.width) * 100}%`);
+      hero.style.setProperty("--mouse-y", `${(heroCenterY / heroRect.height) * 100}%`);
+
+      copy.style.setProperty("--copy-mouse-x", `${copyCenterX}px`);
+      copy.style.setProperty("--copy-mouse-y", `${copyCenterY}px`);
+    };
+
+    setInitialPointerPosition();
+
+    lampModeTimeout = window.setTimeout(() => {
+      hero.classList.add("is-lamp-mode");
+    }, 3400);
+
     hero.addEventListener("pointermove", updatePointerVars);
+    window.addEventListener("resize", setInitialPointerPosition);
 
     return () => {
       hero.removeEventListener("pointermove", updatePointerVars);
+      window.removeEventListener("resize", setInitialPointerPosition);
+      window.clearTimeout(lampModeTimeout);
     };
   }, []);
 

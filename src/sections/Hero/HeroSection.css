@@ -7,6 +7,13 @@
     --lamp-size: 340px;
     --lamp-stroke: 1.5px;
     --lamp-stroke-color: 7, 16, 31;
+    /* Schatten-Text nach Intro */
+    --shadow-text-opacity: 0.085;
+    --shadow-text-blur: 0.85px;
+    --shadow-text-brightness: 0.62;
+    --shadow-text-saturate: 0.72;
+    --shadow-line-color: rgba(237, 244, 255, 0.12);
+    --shadow-accent-color: rgba(var(--accent), 0.14);
     position: relative;
     min-height: 100svh;
     padding: clamp(28px, 4vw, 40px) 0 clamp(44px, 5vw, 56px);
@@ -57,6 +64,7 @@
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
+    transition: opacity 0.4s ease;
 }
 
 .hero-badge {
@@ -128,7 +136,7 @@
     pointer-events: none;
     opacity: 0;
     overflow: visible;
-    animation: negativeLayerFadeIn 1.2s ease 0.55s forwards;
+    transition: opacity 0.45s ease;
     mask-image: radial-gradient( circle var(--lamp-size) at var(--copy-mouse-x) var(--copy-mouse-y), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.9) 44%, rgba(0, 0, 0, 0.48) 66%, rgba(0, 0, 0, 0.12) 84%, rgba(0, 0, 0, 0) 100%);
     -webkit-mask-image: radial-gradient( circle var(--lamp-size) at var(--copy-mouse-x) var(--copy-mouse-y), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.9) 44%, rgba(0, 0, 0, 0.48) 66%, rgba(0, 0, 0, 0.12) 84%, rgba(0, 0, 0, 0) 100%);
 }
@@ -147,7 +155,7 @@
     pointer-events: none;
     opacity: 0;
     overflow: visible;
-    animation: negativeLayerFadeIn 1.2s ease 0.55s forwards;
+    transition: opacity 0.45s ease;
     mask-image: radial-gradient( circle var(--lamp-size) at var(--copy-mouse-x) var(--copy-mouse-y), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.9) 44%, rgba(0, 0, 0, 0.48) 66%, rgba(0, 0, 0, 0.12) 84%, rgba(0, 0, 0, 0) 100%);
     -webkit-mask-image: radial-gradient( circle var(--lamp-size) at var(--copy-mouse-x) var(--copy-mouse-y), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.9) 44%, rgba(0, 0, 0, 0.48) 66%, rgba(0, 0, 0, 0.12) 84%, rgba(0, 0, 0, 0) 100%);
 }
@@ -306,6 +314,7 @@
     opacity: 0;
     transform: translateY(12px);
     animation: fadeUpSoft 0.8s ease 3.3s forwards;
+    transition: opacity 0.4s ease;
 }
 
 .hero-scroll-line {
@@ -323,7 +332,7 @@
     z-index: 7;
     pointer-events: none;
     opacity: 0;
-    animation: negativeLayerFadeIn 1.2s ease 0.55s forwards;
+    transition: opacity 0.45s ease;
     mask-image: radial-gradient( circle var(--lamp-size) at var(--mouse-x) var(--mouse-y), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.9) 44%, rgba(0, 0, 0, 0.48) 66%, rgba(0, 0, 0, 0.12) 84%, rgba(0, 0, 0, 0) 100%);
     -webkit-mask-image: radial-gradient( circle var(--lamp-size) at var(--mouse-x) var(--mouse-y), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.9) 44%, rgba(0, 0, 0, 0.48) 66%, rgba(0, 0, 0, 0.12) 84%, rgba(0, 0, 0, 0) 100%);
 }
@@ -377,20 +386,50 @@
     background: linear-gradient(90deg, rgba(var(--lamp-dark), 0.25), rgba(var(--lamp-dark), 0.95));
 }
 
-@keyframes negativeLayerFadeIn {
-    0% {
-        opacity: 0;
-    }
-    25% {
-        opacity: 0.18;
-    }
-    60% {
-        opacity: 0.55;
-    }
-    100% {
-        opacity: 1;
-    }
+
+/* =========================
+   LAMP MODE
+   ========================= */
+
+.hero.is-lamp-mode .hero-copy .hero-line,
+.hero.is-lamp-mode .hero-copy .hero-builds,
+.hero.is-lamp-mode .hero-copy .hero-digital {
+    opacity: var(--shadow-text-opacity) !important;
+    filter: blur(var(--shadow-text-blur)) brightness(var(--shadow-text-brightness)) saturate(var(--shadow-text-saturate));
+    text-shadow: none !important;
 }
+
+.hero.is-lamp-mode .hero-copy .hero-line,
+.hero.is-lamp-mode .hero-copy .hero-builds {
+    color: var(--shadow-line-color) !important;
+}
+
+.hero.is-lamp-mode .hero-copy .hero-digital {
+    color: var(--shadow-accent-color) !important;
+}
+
+.hero.is-lamp-mode .hero-copy .chromatic-word::before,
+.hero.is-lamp-mode .hero-copy .chromatic-word::after {
+    opacity: 0 !important;
+    animation: none !important;
+}
+
+.hero.is-lamp-mode .hero-copy-negative,
+.hero.is-lamp-mode .hero-copy-stroke,
+.hero.is-lamp-mode .hero-ui-negative {
+    opacity: 1;
+}
+
+.hero.is-lamp-mode>.hero-inner>.hero-badge-row,
+.hero.is-lamp-mode .hero-inner>.hero-scroll {
+    opacity: 0;
+    pointer-events: none;
+}
+
+
+/* =========================
+   ANIMATIONS
+   ========================= */
 
 @keyframes flyInFromRightDustin {
     0% {
@@ -399,11 +438,11 @@
         filter: blur(8px);
     }
     65% {
-        opacity: 0.5;
+        opacity: 0.15;
         filter: blur(2px);
     }
     100% {
-        opacity: 0.5;
+        opacity: 0.1;
         transform: translateX(-5px) scale(1);
         filter: blur(0);
     }
@@ -416,11 +455,11 @@
         filter: blur(8px);
     }
     65% {
-        opacity: 0.5;
+        opacity: 0.15;
         filter: blur(2px);
     }
     100% {
-        opacity: 0.5;
+        opacity: 0.1;
         transform: translateX(-5px) translateY(-5px) scale(1);
         filter: blur(0);
     }
@@ -436,7 +475,7 @@
         filter: blur(3px);
     }
     28% {
-        opacity: 0.22;
+        opacity: 0.075;
         filter: blur(2px);
     }
     38% {
@@ -444,19 +483,19 @@
         filter: blur(2px);
     }
     50% {
-        opacity: 0.45;
+        opacity: 0.15;
         filter: blur(1.5px);
     }
     64% {
-        opacity: 0.18;
+        opacity: 0.09;
         filter: blur(1.5px);
     }
     78% {
-        opacity: 0.82;
+        opacity: 0.2;
         filter: blur(0.8px);
     }
     100% {
-        opacity: 0.5;
+        opacity: 0.25;
         filter: blur(0);
     }
 }
@@ -467,7 +506,7 @@
         transform: translateX(0);
     }
     20% {
-        opacity: 0.45;
+        opacity: 0.13;
         transform: translateX(-2px);
     }
     40% {
@@ -475,7 +514,7 @@
         transform: translateX(1px);
     }
     60% {
-        opacity: 0.55;
+        opacity: 0.15;
         transform: translateX(-1px);
     }
     80% {
@@ -641,21 +680,21 @@
         filter: blur(8px);
     }
     58% {
-        opacity: 0.7;
+        opacity: 0.27;
         transform: translateX(22px) scale(1.035);
         filter: blur(1px);
     }
     72% {
-        opacity: 0.8;
+        opacity: 0.12;
         transform: translateX(-8px) scale(0.995);
         filter: blur(0);
     }
     84% {
-        opacity: 0.8;
+        opacity: 0.28;
         transform: translateX(4px) scale(1.01);
     }
     100% {
-        opacity: 0.5;
+        opacity: 0.25;
         transform: translateX(-2px) scale(1);
         filter: blur(0);
     }
@@ -667,7 +706,7 @@
         transform: translateY(12px);
     }
     to {
-        opacity: 0.5;
+        opacity: 0.25;
         transform: translateY(0);
     }
 }
@@ -712,6 +751,9 @@
     .hero {
         --hero-side: 16px;
         padding-top: 18px;
+        --lamp-size: 280px;
+        --shadow-text-opacity: 0.1;
+        --shadow-text-blur: 0.7px;
     }
     .hero-badge-row {
         gap: 10px;
