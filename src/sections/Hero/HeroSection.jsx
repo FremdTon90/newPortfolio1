@@ -301,7 +301,7 @@ function createNeonArrowTextures() {
   const drawArrow = (context, stroke, lineWidth, shadowBlur = 0, shadowColor = "") => {
     context.save();
     context.translate(width / 2, height / 2);
-    context.rotate(Math.PI / 2); // 90° drehen => nach unten
+    context.rotate(Math.PI / 2);
     context.lineCap = "round";
     context.lineJoin = "round";
     context.strokeStyle = stroke;
@@ -505,7 +505,7 @@ function Floor() {
       receiveShadow
     >
       <planeGeometry args={[42, 34, 340, 260]} />
-      <meshStandardMaterial
+      <meshPhysicalMaterial
         map={tile.colorMap}
         bumpMap={tile.bumpMap}
         bumpScale={0.32}
@@ -513,8 +513,11 @@ function Floor() {
         displacementScale={0.18}
         displacementBias={-0.026}
         color="#ffffff"
-        roughness={1}
+        roughness={0.18}
         metalness={0}
+        clearcoat={1}
+        clearcoatRoughness={0.12}
+        reflectivity={0.95}
       />
     </mesh>
   );
@@ -638,19 +641,19 @@ function NeonArrowSign({ visible }) {
 
     groupRef.current.scale.x = THREE.MathUtils.damp(
       groupRef.current.scale.x,
-      visible ? 1.28 : 0.92,
+      visible ? 2.0 : 1.15,
       9,
       delta
     );
     groupRef.current.scale.y = THREE.MathUtils.damp(
       groupRef.current.scale.y,
-      visible ? 1.28 : 0.92,
+      visible ? 2.0 : 1.15,
       9,
       delta
     );
     groupRef.current.scale.z = THREE.MathUtils.damp(
       groupRef.current.scale.z,
-      visible ? 1.28 : 0.92,
+      visible ? 2.0 : 1.15,
       9,
       delta
     );
@@ -667,7 +670,7 @@ function NeonArrowSign({ visible }) {
     if (glowRef.current?.material) {
       glowRef.current.material.opacity = THREE.MathUtils.damp(
         glowRef.current.material.opacity,
-        visible ? 0.88 * flicker : 0,
+        visible ? 0.36 * flicker : 0,
         8,
         delta
       );
@@ -676,7 +679,7 @@ function NeonArrowSign({ visible }) {
     if (lightRef.current) {
       lightRef.current.intensity = THREE.MathUtils.damp(
         lightRef.current.intensity,
-        visible ? 4.2 * flicker : 0,
+        visible ? 2.3 * flicker : 0,
         10,
         delta
       );
@@ -688,10 +691,10 @@ function NeonArrowSign({ visible }) {
       ref={groupRef}
       position={[11.9, 1.28, -12.18]}
       rotation={[0, -0.28, 0]}
-      scale={0.92}
+      scale={1.15}
     >
       <mesh ref={glowRef} position={[0, 0, -0.14]} renderOrder={3}>
-        <planeGeometry args={[4.6, 4.6]} />
+        <planeGeometry args={[2.8, 2.8]} />
         <meshBasicMaterial
           map={textures.glowMap}
           transparent
@@ -703,7 +706,7 @@ function NeonArrowSign({ visible }) {
       </mesh>
 
       <mesh ref={frontRef} position={[0, 0, 0.02]} castShadow receiveShadow renderOrder={4}>
-        <planeGeometry args={[2.35, 2.35]} />
+        <planeGeometry args={[2.7, 2.7]} />
         <meshBasicMaterial
           map={textures.colorMap}
           transparent
@@ -727,7 +730,7 @@ function NeonArrowSign({ visible }) {
         position={[0, 0, 0.35]}
         color="#ff3a3a"
         intensity={0}
-        distance={12}
+        distance={9}
         decay={1.8}
       />
     </group>
@@ -927,18 +930,24 @@ function PowerLights({ powerState, pointer, showArrow }) {
   const wallWashRef = useRef(null);
   const spotRef = useRef(null);
   const neonBounceRef = useRef(null);
+  const neonEdgeRef = useRef(null);
 
   const spotTarget = useMemo(() => new THREE.Object3D(), []);
+  const edgeTarget = useMemo(() => new THREE.Object3D(), []);
 
   useEffect(() => {
     scene.add(spotTarget);
-    return () => scene.remove(spotTarget);
-  }, [scene, spotTarget]);
+    scene.add(edgeTarget);
+    return () => {
+      scene.remove(spotTarget);
+      scene.remove(edgeTarget);
+    };
+  }, [scene, spotTarget, edgeTarget]);
 
   useEffect(() => {
-    if (!spotRef.current) return;
-    spotRef.current.target = spotTarget;
-  }, [spotTarget]);
+    if (spotRef.current) spotRef.current.target = spotTarget;
+    if (neonEdgeRef.current) neonEdgeRef.current.target = edgeTarget;
+  }, [spotTarget, edgeTarget]);
 
   useFrame((state, delta) => {
     const t = state.clock.getElapsedTime();
@@ -1036,10 +1045,23 @@ function PowerLights({ powerState, pointer, showArrow }) {
       gl.shadowMap.needsUpdate = true;
     }
 
+    edgeTarget.position.set(-1.8, -0.35, -1.2);
+    edgeTarget.updateMatrixWorld(true);
+
     if (neonBounceRef.current) {
-      const target = showArrow ? 1.05 : 0;
+      const target = showArrow ? 0.78 : 0;
       neonBounceRef.current.intensity = THREE.MathUtils.damp(
         neonBounceRef.current.intensity,
+        target,
+        8,
+        delta
+      );
+    }
+
+    if (neonEdgeRef.current) {
+      const target = showArrow ? 145 : 0;
+      neonEdgeRef.current.intensity = THREE.MathUtils.damp(
+        neonEdgeRef.current.intensity,
         target,
         8,
         delta
@@ -1065,8 +1087,19 @@ function PowerLights({ powerState, pointer, showArrow }) {
         position={[11.55, 1.25, -11.25]}
         color="#ff3b3b"
         intensity={0}
-        distance={13}
+        distance={9.5}
         decay={1.8}
+      />
+
+      <spotLight
+        ref={neonEdgeRef}
+        position={[9.8, 0.95, -10.6]}
+        color="#ff4545"
+        intensity={0}
+        angle={0.17}
+        penumbra={1}
+        distance={22}
+        decay={1.6}
       />
 
       <spotLight
