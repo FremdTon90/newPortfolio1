@@ -1,5 +1,12 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import React, {
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useLayoutEffect,
+} from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text3D } from "@react-three/drei";
 import * as THREE from "three";
 import "./HeroSection.css";
@@ -44,94 +51,113 @@ class HeroCanvasErrorBoundary extends React.Component {
 ----------------------------- */
 
 function createBrickTextures() {
-  const size = 1024;
+  const width = 2048;
+  const height = 1024;
 
   const colorCanvas = document.createElement("canvas");
-  colorCanvas.width = size;
-  colorCanvas.height = size;
+  colorCanvas.width = width;
+  colorCanvas.height = height;
   const ctx = colorCanvas.getContext("2d");
 
   const bumpCanvas = document.createElement("canvas");
-  bumpCanvas.width = size;
-  bumpCanvas.height = size;
+  bumpCanvas.width = width;
+  bumpCanvas.height = height;
   const btx = bumpCanvas.getContext("2d");
 
-  // base
-  ctx.fillStyle = "#0a1423";
-  ctx.fillRect(0, 0, size, size);
+  const dispCanvas = document.createElement("canvas");
+  dispCanvas.width = width;
+  dispCanvas.height = height;
+  const dtx = dispCanvas.getContext("2d");
 
-  btx.fillStyle = "#9a9a9a";
-  btx.fillRect(0, 0, size, size);
+  // dunkles Ziegelrot als Grundwelt
+  ctx.fillStyle = "#140809";
+  ctx.fillRect(0, 0, width, height);
 
-  const brickW = 170;
-  const brickH = 72;
+  btx.fillStyle = "#6c6c6c";
+  btx.fillRect(0, 0, width, height);
+
+  dtx.fillStyle = "#4a4a4a";
+  dtx.fillRect(0, 0, width, height);
+
+  const brickW = 128;
+  const brickH = 52;
   const mortar = 8;
+  const rowStep = brickH + mortar;
 
-  for (let y = 0; y < size + brickH; y += brickH + mortar) {
-    const oddRow = Math.floor(y / (brickH + mortar)) % 2 === 1;
-    const offset = oddRow ? brickW / 2 : 0;
+  for (let row = 0, y = 0; y < height + brickH; row += 1, y += rowStep) {
+    const offset = row % 2 === 1 ? brickW / 2 : 0;
 
-    for (let x = -brickW; x < size + brickW; x += brickW + mortar) {
+    for (let x = -brickW; x < width + brickW; x += brickW + mortar) {
       const px = x + offset;
 
-      const hue = 210 + Math.random() * 12;
-      const sat = 35 + Math.random() * 14;
-      const light = 12 + Math.random() * 8;
+      // brick red / burgundy / burnt red
+      const hue = 4 + Math.random() * 10;
+      const sat = 34 + Math.random() * 18;
+      const light = 14 + Math.random() * 7;
 
       ctx.fillStyle = `hsl(${hue} ${sat}% ${light}%)`;
       ctx.fillRect(px, y, brickW, brickH);
 
-      // brick shading
-      ctx.fillStyle = "rgba(255,255,255,0.03)";
-      ctx.fillRect(px, y, brickW, 6);
+      ctx.fillStyle = "rgba(255,220,210,0.035)";
+      ctx.fillRect(px, y, brickW, 4);
 
-      ctx.fillStyle = "rgba(0,0,0,0.16)";
-      ctx.fillRect(px, y + brickH - 8, brickW, 8);
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      ctx.fillRect(px, y + brickH - 6, brickW, 6);
 
-      // subtle noise
-      for (let i = 0; i < 24; i++) {
+      for (let i = 0; i < 18; i++) {
         const nx = px + Math.random() * brickW;
         const ny = y + Math.random() * brickH;
-        const a = 0.03 + Math.random() * 0.05;
-        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        const a = 0.012 + Math.random() * 0.03;
+        ctx.fillStyle = `rgba(255,235,230,${a})`;
         ctx.fillRect(nx, ny, 2, 2);
       }
 
-      // bump brick higher than mortar
-      btx.fillStyle = "#cfcfcf";
+      // bump
+      btx.fillStyle = "#d7d7d7";
       btx.fillRect(px, y, brickW, brickH);
+      btx.fillStyle = "#efefef";
+      btx.fillRect(px + 1, y + 1, brickW - 2, 2);
+      btx.fillStyle = "#939393";
+      btx.fillRect(px, y + brickH - 3, brickW, 3);
 
-      btx.fillStyle = "#dddddd";
-      btx.fillRect(px, y, brickW, 4);
-
-      btx.fillStyle = "#a8a8a8";
-      btx.fillRect(px, y + brickH - 5, brickW, 5);
+      // displacement
+      dtx.fillStyle = "#ececec";
+      dtx.fillRect(px, y, brickW, brickH);
+      dtx.fillStyle = "#fafafa";
+      dtx.fillRect(px + 1, y + 1, brickW - 2, 2);
+      dtx.fillStyle = "#9a9a9a";
+      dtx.fillRect(px, y + brickH - 3, brickW, 3);
     }
   }
 
-  // mortar lines
-  ctx.strokeStyle = "rgba(155,175,205,0.12)";
-  ctx.lineWidth = mortar;
-  for (let y = brickH; y < size; y += brickH + mortar) {
-    ctx.beginPath();
-    ctx.moveTo(0, y + mortar / 2);
-    ctx.lineTo(size, y + mortar / 2);
-    ctx.stroke();
+  // Mörtel dunkler und tiefer
+  for (let y = brickH; y < height; y += rowStep) {
+    btx.fillStyle = "#5e5e5e";
+    btx.fillRect(0, y, width, mortar);
+
+    dtx.fillStyle = "#343434";
+    dtx.fillRect(0, y, width, mortar);
   }
 
   const colorMap = new THREE.CanvasTexture(colorCanvas);
-  colorMap.wrapS = THREE.RepeatWrapping;
-  colorMap.wrapT = THREE.RepeatWrapping;
-  colorMap.repeat.set(2.4, 1.4);
+  colorMap.wrapS = THREE.ClampToEdgeWrapping;
+  colorMap.wrapT = THREE.ClampToEdgeWrapping;
+  colorMap.repeat.set(1, 1);
   colorMap.anisotropy = 8;
 
   const bumpMap = new THREE.CanvasTexture(bumpCanvas);
-  bumpMap.wrapS = THREE.RepeatWrapping;
-  bumpMap.wrapT = THREE.RepeatWrapping;
-  bumpMap.repeat.set(2.4, 1.4);
+  bumpMap.wrapS = THREE.ClampToEdgeWrapping;
+  bumpMap.wrapT = THREE.ClampToEdgeWrapping;
+  bumpMap.repeat.set(1, 1);
   bumpMap.anisotropy = 8;
 
-  return { colorMap, bumpMap };
+  const displacementMap = new THREE.CanvasTexture(dispCanvas);
+  displacementMap.wrapS = THREE.ClampToEdgeWrapping;
+  displacementMap.wrapT = THREE.ClampToEdgeWrapping;
+  displacementMap.repeat.set(1, 1);
+  displacementMap.anisotropy = 8;
+
+  return { colorMap, bumpMap, displacementMap };
 }
 
 function createTileTextures() {
@@ -147,101 +173,221 @@ function createTileTextures() {
   bumpCanvas.height = size;
   const btx = bumpCanvas.getContext("2d");
 
-  ctx.fillStyle = "#060b14";
+  const dispCanvas = document.createElement("canvas");
+  dispCanvas.width = size;
+  dispCanvas.height = size;
+  const dtx = dispCanvas.getContext("2d");
+
+  // viel dunklerer Boden
+  ctx.fillStyle = "#02050a";
   ctx.fillRect(0, 0, size, size);
 
-  btx.fillStyle = "#cfcfcf";
+  btx.fillStyle = "#7f7f7f";
   btx.fillRect(0, 0, size, size);
 
-  const tile = 120;
-  const grout = 7;
+  dtx.fillStyle = "#606060";
+  dtx.fillRect(0, 0, size, size);
+
+  const tile = 184;
+  const grout = 12;
 
   for (let y = 0; y < size; y += tile) {
     for (let x = 0; x < size; x += tile) {
-      const v = 7 + Math.random() * 4;
-      ctx.fillStyle = `hsl(214 35% ${v}%)`;
+      const v = 2.8 + Math.random() * 1.3;
+      ctx.fillStyle = `hsl(215 18% ${v}%)`;
       ctx.fillRect(x + grout / 2, y + grout / 2, tile - grout, tile - grout);
 
-      ctx.fillStyle = "rgba(255,255,255,0.025)";
-      ctx.fillRect(x + grout / 2, y + grout / 2, tile - grout, 5);
+      ctx.fillStyle = "rgba(255,255,255,0.005)";
+      ctx.fillRect(x + grout / 2, y + grout / 2, tile - grout, 2);
 
-      ctx.fillStyle = "rgba(255,255,255,0.02)";
-      ctx.fillRect(x + grout / 2, y + grout / 2, 5, tile - grout);
+      ctx.fillStyle = "rgba(0,0,0,0.18)";
+      ctx.fillRect(x + grout / 2, y + tile - grout - 2, tile - grout, 2);
 
-      ctx.fillStyle = "rgba(0,0,0,0.15)";
-      ctx.fillRect(x + grout / 2, y + tile - grout - 5, tile - grout, 5);
-
-      btx.fillStyle = "#dfdfdf";
+      // Fliese hoch
+      btx.fillStyle = "#d3d3d3";
       btx.fillRect(x + grout / 2, y + grout / 2, tile - grout, tile - grout);
 
-      btx.fillStyle = "#8f8f8f";
+      // Fuge deutlich tiefer
+      btx.fillStyle = "#575757";
       btx.fillRect(x, y, tile, grout);
       btx.fillRect(x, y, grout, tile);
+
+      dtx.fillStyle = "#e7e7e7";
+      dtx.fillRect(x + grout / 2, y + grout / 2, tile - grout, tile - grout);
+
+      dtx.fillStyle = "#3e3e3e";
+      dtx.fillRect(x, y, tile, grout);
+      dtx.fillRect(x, y, grout, tile);
     }
   }
 
   const colorMap = new THREE.CanvasTexture(colorCanvas);
   colorMap.wrapS = THREE.RepeatWrapping;
   colorMap.wrapT = THREE.RepeatWrapping;
-  colorMap.repeat.set(4.5, 4.5);
+  colorMap.repeat.set(3.25, 3.25);
   colorMap.anisotropy = 8;
 
   const bumpMap = new THREE.CanvasTexture(bumpCanvas);
   bumpMap.wrapS = THREE.RepeatWrapping;
   bumpMap.wrapT = THREE.RepeatWrapping;
-  bumpMap.repeat.set(4.5, 4.5);
+  bumpMap.repeat.set(3.25, 3.25);
   bumpMap.anisotropy = 8;
 
-  return { colorMap, bumpMap };
+  const displacementMap = new THREE.CanvasTexture(dispCanvas);
+  displacementMap.wrapS = THREE.RepeatWrapping;
+  displacementMap.wrapT = THREE.RepeatWrapping;
+  displacementMap.repeat.set(3.25, 3.25);
+  displacementMap.anisotropy = 8;
+
+  return { colorMap, bumpMap, displacementMap };
 }
 
 /* -----------------------------
    Scene parts
 ----------------------------- */
 
-function Wall({ powerState }) {
-  const wallMaterialRef = useRef(null);
-
-  const brick = useMemo(() => createBrickTextures(), []);
-
+function BrickMaterial({
+  powerState,
+  textures,
+  materialRef,
+  color = "#c97d72",
+  emissive = "#2a0f10",
+}) {
   useFrame((state) => {
-    if (!wallMaterialRef.current) return;
+    if (!materialRef.current) return;
 
     const t = state.clock.getElapsedTime();
+    let emissiveIntensity = 0.12;
 
-    let emissiveIntensity = 0.16;
-
-    if (powerState === "intro") emissiveIntensity = 0.22;
+    if (powerState === "intro") emissiveIntensity = 0.16;
 
     if (powerState === "flicker") {
       emissiveIntensity =
         Math.sin(t * 34) > 0.35
-          ? 0.2
+          ? 0.15
           : Math.sin(t * 18) > -0.1
-            ? 0.09
-            : 0.03;
+            ? 0.06
+            : 0.02;
     }
 
-    if (powerState === "lamp") emissiveIntensity = 0.06;
+    if (powerState === "lamp") emissiveIntensity = 0.035;
 
-    wallMaterialRef.current.emissiveIntensity = emissiveIntensity;
+    materialRef.current.emissiveIntensity = emissiveIntensity;
   });
 
   return (
+    <meshStandardMaterial
+      ref={materialRef}
+      map={textures.colorMap}
+      bumpMap={textures.bumpMap}
+      bumpScale={0.16}
+      displacementMap={textures.displacementMap}
+      displacementScale={0.22}
+      displacementBias={-0.008}
+      color={color}
+      roughness={1}
+      metalness={0}
+      emissive={emissive}
+      emissiveIntensity={0.12}
+    />
+  );
+}
+
+function BackWall({ powerState }) {
+  const wallMaterialRef = useRef(null);
+  const textures = useMemo(() => createBrickTextures(), []);
+
+  return (
     <mesh position={[0, 0.15, -8.8]} receiveShadow>
-      <planeGeometry args={[34, 18, 1, 1]} />
-      <meshStandardMaterial
-        ref={wallMaterialRef}
-        map={brick.colorMap}
-        bumpMap={brick.bumpMap}
-        bumpScale={0.24}
-        color="#85a7d0"
-        roughness={0.98}
-        metalness={0.02}
-        emissive="#0d1b31"
-        emissiveIntensity={0.16}
+      <planeGeometry args={[34, 18, 280, 170]} />
+      <BrickMaterial
+        powerState={powerState}
+        textures={textures}
+        materialRef={wallMaterialRef}
+        color="#b97770"
+        emissive="#2a1112"
       />
     </mesh>
+  );
+}
+
+function SideWalls({ powerState }) {
+  const leftRef = useRef(null);
+  const rightRef = useRef(null);
+  const textures = useMemo(() => createBrickTextures(), []);
+
+  useFrame((state) => {
+    const refs = [leftRef.current, rightRef.current].filter(Boolean);
+    const t = state.clock.getElapsedTime();
+
+    refs.forEach((mat) => {
+      let emissiveIntensity = 0.06;
+
+      if (powerState === "intro") emissiveIntensity = 0.09;
+
+      if (powerState === "flicker") {
+        emissiveIntensity =
+          Math.sin(t * 28) > 0.3
+            ? 0.085
+            : Math.sin(t * 16) > -0.05
+              ? 0.04
+              : 0.012;
+      }
+
+      if (powerState === "lamp") emissiveIntensity = 0.02;
+
+      mat.emissiveIntensity = emissiveIntensity;
+    });
+  });
+
+  return (
+    <>
+      <mesh
+        position={[-17, 0.15, -0.3]}
+        rotation={[0, Math.PI / 2, 0]}
+        receiveShadow
+      >
+        <planeGeometry args={[17.2, 18, 180, 160]} />
+        <meshStandardMaterial
+          ref={leftRef}
+          map={textures.colorMap}
+          bumpMap={textures.bumpMap}
+          bumpScale={0.14}
+          displacementMap={textures.displacementMap}
+          displacementScale={0.18}
+          displacementBias={-0.008}
+          color="#9f625c"
+          roughness={1}
+          metalness={0}
+          emissive="#241011"
+          emissiveIntensity={0.06}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      <mesh
+        position={[17, 0.15, -0.3]}
+        rotation={[0, -Math.PI / 2, 0]}
+        receiveShadow
+      >
+        <planeGeometry args={[17.2, 18, 180, 160]} />
+        <meshStandardMaterial
+          ref={rightRef}
+          map={textures.colorMap}
+          bumpMap={textures.bumpMap}
+          bumpScale={0.14}
+          displacementMap={textures.displacementMap}
+          displacementScale={0.18}
+          displacementBias={-0.008}
+          color="#9f625c"
+          roughness={1}
+          metalness={0}
+          emissive="#241011"
+          emissiveIntensity={0.06}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    </>
   );
 }
 
@@ -250,49 +396,94 @@ function Floor() {
 
   return (
     <mesh
-      position={[0, -6.1, -4.4]}
+      position={[0, -6.1, -0.2]}
       rotation={[-Math.PI / 2, 0, 0]}
       receiveShadow
     >
-      <planeGeometry args={[40, 24, 1, 1]} />
+      <planeGeometry args={[40, 24, 260, 180]} />
       <meshStandardMaterial
         map={tile.colorMap}
         bumpMap={tile.bumpMap}
-        bumpScale={0.14}
-        color="#8aa0bf"
-        roughness={0.92}
-        metalness={0.03}
+        bumpScale={0.16}
+        displacementMap={tile.displacementMap}
+        displacementScale={0.085}
+        displacementBias={-0.01}
+        color="#374252"
+        roughness={1}
+        metalness={0}
       />
     </mesh>
   );
 }
 
+function getMeshWidth(ref) {
+  if (!ref.current) return 0;
+  ref.current.geometry.computeBoundingBox();
+  const box = ref.current.geometry.boundingBox;
+  return box ? box.max.x - box.min.x : 0;
+}
+
 function TextBlock({ powerState, introProgress }) {
   const rootRef = useRef(null);
 
-  const leftX = -10.2;
-  const lineY1 = 2.15;
-  const lineY2 = -0.15;
-  const lineY3 = -2.6;
+  const dustinRef = useRef(null);
+  const buildsRef = useRef(null);
+  const digitalRef = useRef(null);
+  const expRef = useRef(null);
 
-  const baseColor = powerState === "lamp" ? "#aab6ca" : "#dfe9ff";
-  const accentColor = powerState === "lamp" ? "#79e8f8" : "#9bf6ff";
-  const baseEmissive = powerState === "lamp" ? "#0d1525" : "#1b2d49";
-  const baseEmissiveIntensity = powerState === "lamp" ? 0.03 : 0.1;
-  const accentEmissiveIntensity = powerState === "lamp" ? 0.18 : 0.34;
+  const [layoutReady, setLayoutReady] = useState(false);
+  const [positions, setPositions] = useState({
+    dustinX: -10,
+    buildsX: -10,
+    digitalX: -4,
+    expX: -10,
+  });
+
+  const lineY1 = 1.72;
+  const lineY2 = -0.18;
+  const lineY3 = -1.95;
+  const wordGap = 0.46;
+
+  const baseColor = powerState === "lamp" ? "#d7d5d1" : "#e2e8f4";
+  const accentColor = powerState === "lamp" ? "#7ce6f5" : "#9bf6ff";
+  const baseEmissive = powerState === "lamp" ? "#0b1220" : "#1b2d49";
+  const baseEmissiveIntensity = powerState === "lamp" ? 0.018 : 0.07;
+  const accentEmissiveIntensity = powerState === "lamp" ? 0.11 : 0.22;
 
   const sharedMaterial = useMemo(
     () => ({
-      roughness: 0.84,
-      metalness: 0.04,
+      roughness: 0.94,
+      metalness: 0,
     }),
     []
   );
 
+  useLayoutEffect(() => {
+    const timer = window.setTimeout(() => {
+      const buildsWidth = getMeshWidth(buildsRef);
+      const digitalWidth = getMeshWidth(digitalRef);
+
+      const digitalX = -digitalWidth / 2;
+      const buildsX = digitalX - wordGap - buildsWidth;
+      const leftAlignedX = buildsX;
+
+      setPositions({
+        dustinX: leftAlignedX,
+        buildsX,
+        digitalX,
+        expX: leftAlignedX,
+      });
+
+      setLayoutReady(true);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
   useFrame((_, delta) => {
     if (!rootRef.current) return;
 
-    const introYOffset = THREE.MathUtils.lerp(0.7, 0, introProgress);
+    const introYOffset = THREE.MathUtils.lerp(0.65, 0, introProgress);
     rootRef.current.position.y = THREE.MathUtils.damp(
       rootRef.current.position.y,
       introYOffset,
@@ -302,18 +493,20 @@ function TextBlock({ powerState, introProgress }) {
   });
 
   return (
-    <group ref={rootRef} position={[0, 0.2, -0.45]}>
-      <group position={[leftX, lineY1, 0]}>
+    <group ref={rootRef} position={[0, 0.12, -0.45]} visible={layoutReady}>
+      <group position={[positions.dustinX, lineY1, 0]}>
         <Text3D
+          ref={dustinRef}
           font={FONT_URL}
-          size={1.36}
+          size={1.18}
           height={0.34}
           curveSegments={10}
           bevelEnabled
-          bevelThickness={0.015}
-          bevelSize={0.012}
+          bevelThickness={0.02}
+          bevelSize={0.018}
           bevelOffset={0}
-          bevelSegments={4}
+          bevelSegments={5}
+          scale={[1.08, 1, 1]}
           castShadow
           receiveShadow
         >
@@ -327,17 +520,19 @@ function TextBlock({ powerState, introProgress }) {
         </Text3D>
       </group>
 
-      <group position={[leftX, lineY2, 0]}>
+      <group position={[positions.buildsX, lineY2, 0]}>
         <Text3D
+          ref={buildsRef}
           font={FONT_URL}
-          size={0.96}
-          height={0.28}
+          size={1.02}
+          height={0.3}
           curveSegments={10}
           bevelEnabled
-          bevelThickness={0.013}
-          bevelSize={0.01}
+          bevelThickness={0.018}
+          bevelSize={0.016}
           bevelOffset={0}
-          bevelSegments={4}
+          bevelSegments={5}
+          scale={[1.08, 1, 1]}
           castShadow
           receiveShadow
         >
@@ -351,42 +546,46 @@ function TextBlock({ powerState, introProgress }) {
         </Text3D>
       </group>
 
-      <group position={[leftX + 5.15, lineY2, 0]}>
+      <group position={[positions.digitalX, lineY2, 0]}>
         <Text3D
+          ref={digitalRef}
           font={FONT_URL}
-          size={0.96}
-          height={0.28}
+          size={1.02}
+          height={0.3}
           curveSegments={10}
           bevelEnabled
-          bevelThickness={0.013}
-          bevelSize={0.01}
+          bevelThickness={0.018}
+          bevelSize={0.016}
           bevelOffset={0}
-          bevelSegments={4}
+          bevelSegments={5}
+          scale={[1.08, 1, 1]}
           castShadow
           receiveShadow
         >
           digital
           <meshStandardMaterial
             color={accentColor}
-            emissive="#6af3ff"
+            emissive="#57e9ff"
             emissiveIntensity={accentEmissiveIntensity}
-            roughness={0.8}
-            metalness={0.04}
+            roughness={0.9}
+            metalness={0}
           />
         </Text3D>
       </group>
 
-      <group position={[leftX, lineY3, 0]}>
+      <group position={[positions.expX, lineY3, 0]}>
         <Text3D
+          ref={expRef}
           font={FONT_URL}
-          size={1.16}
-          height={0.32}
+          size={1.18}
+          height={0.34}
           curveSegments={10}
           bevelEnabled
-          bevelThickness={0.014}
-          bevelSize={0.011}
+          bevelThickness={0.02}
+          bevelSize={0.018}
           bevelOffset={0}
-          bevelSegments={4}
+          bevelSegments={5}
+          scale={[1.08, 1, 1]}
           castShadow
           receiveShadow
         >
@@ -404,115 +603,120 @@ function TextBlock({ powerState, introProgress }) {
 }
 
 function PowerLights({ powerState, pointer }) {
+  const { scene, gl } = useThree();
+
   const ambientRef = useRef(null);
   const wallWashRef = useRef(null);
   const spotRef = useRef(null);
-  const targetRef = useRef(null);
 
-  useFrame((state, delta) => {
+  const spotTarget = useMemo(() => new THREE.Object3D(), []);
+
+  useEffect(() => {
+    scene.add(spotTarget);
+    return () => scene.remove(spotTarget);
+  }, [scene, spotTarget]);
+
+  useEffect(() => {
+    if (!spotRef.current) return;
+    spotRef.current.target = spotTarget;
+  }, [spotTarget]);
+
+  useFrame((state) => {
     const t = state.clock.getElapsedTime();
 
     if (ambientRef.current) {
-      let ambient = 0.22;
+      let ambient = 0.14;
 
-      if (powerState === "intro") ambient = 0.28;
+      if (powerState === "intro") ambient = 0.2;
 
       if (powerState === "flicker") {
         ambient =
           Math.sin(t * 28) > 0.32
-            ? 0.2
+            ? 0.13
             : Math.sin(t * 16) > -0.1
-              ? 0.08
-              : 0.02;
+              ? 0.05
+              : 0.015;
       }
 
-      if (powerState === "lamp") ambient = 0.035;
+      if (powerState === "lamp") ambient = 0.022;
 
       ambientRef.current.intensity = ambient;
     }
 
     if (wallWashRef.current) {
-      let fill = 1.45;
+      let fill = 0.7;
 
-      if (powerState === "intro") fill = 1.8;
+      if (powerState === "intro") fill = 0.95;
 
       if (powerState === "flicker") {
         fill =
           Math.sin(t * 22) > 0.28
-            ? 1.15
+            ? 0.62
             : Math.sin(t * 13) > -0.06
-              ? 0.45
-              : 0.06;
+              ? 0.22
+              : 0.04;
       }
 
-      if (powerState === "lamp") fill = 0.14;
+      if (powerState === "lamp") fill = 0.045;
 
       wallWashRef.current.intensity = fill;
     }
 
-    if (spotRef.current && targetRef.current) {
-      // Wandbereich direkt aus Cursor ableiten
-      const targetX = THREE.MathUtils.clamp(pointer.x * 14.2, -14.2, 14.2);
-      const targetY = THREE.MathUtils.clamp(pointer.y * 7.2, -7.2, 7.2);
+    if (spotRef.current) {
+      const targetX = THREE.MathUtils.clamp(pointer.x * 13.5, -13.5, 13.5);
+      const targetY = THREE.MathUtils.clamp(pointer.y * 6.5, -6.5, 6.5);
 
-      // Target direkt auf Wand an Cursorposition
-      targetRef.current.position.x = targetX;
-      targetRef.current.position.y = targetY;
-      targetRef.current.position.z = -8.75;
+      const lampX = THREE.MathUtils.clamp(pointer.x * 1.8, -1.8, 1.8);
+      const lampY = THREE.MathUtils.clamp(pointer.y * 1.2, -1.2, 1.2) + 0.3;
 
-      // Spot direkt "über" dem Cursorpunkt, kaum Versatz
-      spotRef.current.position.x = THREE.MathUtils.damp(
-        spotRef.current.position.x,
-        targetX,
-        18,
-        delta
-      );
-      spotRef.current.position.y = THREE.MathUtils.damp(
-        spotRef.current.position.y,
-        targetY + 0.2,
-        18,
-        delta
-      );
-      spotRef.current.position.z = THREE.MathUtils.damp(
-        spotRef.current.position.z,
-        11.8,
-        14,
-        delta
-      );
+      spotTarget.position.set(targetX, targetY, -8.75);
+      spotTarget.updateMatrixWorld(true);
 
-      spotRef.current.target = targetRef.current;
-      spotRef.current.intensity = powerState === "lamp" ? 720 : 0;
-      spotRef.current.angle = 0.46;
-      spotRef.current.penumbra = 0.32;
-      spotRef.current.distance = 72;
-      spotRef.current.decay = 1.05;
+      spotRef.current.position.set(lampX, lampY, 11.8);
+      spotRef.current.target = spotTarget;
+      spotRef.current.intensity = powerState === "lamp" ? 980 : 0;
+
+      // kleinerer Lichtkegel
+      spotRef.current.angle = 0.22;
+      spotRef.current.penumbra = 0.2;
+      spotRef.current.distance = 78;
+      spotRef.current.decay = 1.08;
+
+      spotRef.current.shadow.camera.near = 6;
+      spotRef.current.shadow.camera.far = 34;
+      spotRef.current.shadow.focus = 1;
+      spotRef.current.shadow.bias = -0.00012;
+      spotRef.current.shadow.normalBias = 0.02;
+      spotRef.current.shadow.radius = 1.1;
+      spotRef.current.shadow.needsUpdate = true;
+      spotRef.current.shadow.camera.updateProjectionMatrix();
+
+      gl.shadowMap.needsUpdate = true;
     }
   });
 
   return (
     <>
-      <ambientLight ref={ambientRef} intensity={0.22} color="#9db8ff" />
+      <ambientLight ref={ambientRef} intensity={0.14} color="#8ea0b8" />
 
       <pointLight
         ref={wallWashRef}
-        position={[0, 1.4, -5.5]}
-        color="#1f5f88"
-        intensity={1.45}
-        distance={30}
+        position={[0, 1.2, -5.7]}
+        color="#4f2523"
+        intensity={0.7}
+        distance={28}
         decay={1.8}
       />
 
-      <object3D ref={targetRef} position={[0, 0, -8.75]} />
-
       <spotLight
         ref={spotRef}
-        position={[0, 0.2, 11.8]}
-        color="#e9fdff"
+        position={[0, 0.3, 11.8]}
+        color="#f4fcff"
         castShadow
         shadow-mapSize-width={4096}
         shadow-mapSize-height={4096}
-        shadow-bias={-0.00008}
-        shadow-normalBias={0.015}
+        shadow-bias={-0.00012}
+        shadow-normalBias={0.02}
       />
     </>
   );
@@ -522,7 +726,8 @@ function Scene({ powerState, pointer, introProgress }) {
   return (
     <>
       <fog attach="fog" args={["#02050b", 11, 32]} />
-      <Wall powerState={powerState} />
+      <BackWall powerState={powerState} />
+      <SideWalls powerState={powerState} />
       <Floor />
       <PowerLights powerState={powerState} pointer={pointer} />
       <TextBlock powerState={powerState} introProgress={introProgress} />
@@ -610,7 +815,10 @@ export default function HeroSection() {
             shadows
             camera={{ position: [0, 0, 18], fov: 36 }}
             dpr={[1, 1.8]}
-            gl={{ antialias: true }}
+            gl={{
+              antialias: true,
+              physicallyCorrectLights: true,
+            }}
           >
             <Suspense fallback={null}>
               <Scene
