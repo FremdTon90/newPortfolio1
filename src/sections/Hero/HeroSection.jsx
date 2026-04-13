@@ -48,6 +48,130 @@ class HeroCanvasErrorBoundary extends React.Component {
 }
 
 /* -----------------------------
+   Texture helpers
+----------------------------- */
+
+function createColorTextureFromCanvas(canvas) {
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.repeat.set(1, 1);
+  tex.anisotropy = 8;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function createDataTextureFromCanvas(canvas) {
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.repeat.set(1, 1);
+  tex.anisotropy = 8;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function drawSoftBlob(ctx, x, y, rx, ry, colorStops) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(rx, ry);
+
+  const grad = ctx.createRadialGradient(0, 0, 0.05, 0, 0, 1);
+  colorStops.forEach(([stop, color]) => grad.addColorStop(stop, color));
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(0, 0, 1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function addSpeckleNoise(ctx, width, height, count, alphaMin, alphaMax, dark = false) {
+  for (let i = 0; i < count; i += 1) {
+    const x = Math.random() * width;
+    const y = Math.random() * height;
+    const size = 0.7 + Math.random() * 1.5;
+    const a = alphaMin + Math.random() * (alphaMax - alphaMin);
+
+    ctx.fillStyle = dark
+      ? `rgba(0,0,0,${a})`
+      : `rgba(255,255,255,${a})`;
+
+    ctx.fillRect(x, y, size, size);
+  }
+}
+
+function drawFineScratches(ctx, areaX, areaY, areaW, areaH, count, alpha = 0.05) {
+  ctx.save();
+  for (let i = 0; i < count; i += 1) {
+    const x = areaX + Math.random() * areaW;
+    const y = areaY + Math.random() * areaH;
+    const len = 6 + Math.random() * 18;
+    const angle = (-0.6 + Math.random() * 1.2) * 0.35;
+    const dx = Math.cos(angle) * len;
+    const dy = Math.sin(angle) * len;
+
+    ctx.strokeStyle = `rgba(255,255,255,${alpha * (0.65 + Math.random() * 0.7)})`;
+    ctx.lineWidth = 0.4 + Math.random() * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + dx, y + dy);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function createNormalMapFromHeightCanvas(heightCanvas, strength = 2.2) {
+  const srcCtx = heightCanvas.getContext("2d");
+  const { width, height } = heightCanvas;
+  const src = srcCtx.getImageData(0, 0, width, height);
+  const out = srcCtx.createImageData(width, height);
+
+  const get = (x, y) => {
+    const ix = Math.max(0, Math.min(width - 1, x));
+    const iy = Math.max(0, Math.min(height - 1, y));
+    const i = (iy * width + ix) * 4;
+    return src.data[i] / 255;
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const l = get(x - 1, y);
+      const r = get(x + 1, y);
+      const u = get(x, y - 1);
+      const d = get(x, y + 1);
+
+      const dx = (l - r) * strength;
+      const dy = (u - d) * strength;
+      const dz = 1.0;
+
+      const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+      const nx = dx / len;
+      const ny = dy / len;
+      const nz = dz / len;
+
+      const i = (y * width + x) * 4;
+      out.data[i] = (nx * 0.5 + 0.5) * 255;
+      out.data[i + 1] = (ny * 0.5 + 0.5) * 255;
+      out.data[i + 2] = (nz * 0.5 + 0.5) * 255;
+      out.data[i + 3] = 255;
+    }
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext("2d").putImageData(out, 0, 0);
+
+  return createDataTextureFromCanvas(canvas);
+}
+
+/* -----------------------------
    Procedural textures
 ----------------------------- */
 
@@ -60,26 +184,26 @@ function createBrickTextures() {
   colorCanvas.height = height;
   const ctx = colorCanvas.getContext("2d");
 
-  const bumpCanvas = document.createElement("canvas");
-  bumpCanvas.width = width;
-  bumpCanvas.height = height;
-  const btx = bumpCanvas.getContext("2d");
+  const heightCanvas = document.createElement("canvas");
+  heightCanvas.width = width;
+  heightCanvas.height = height;
+  const htx = heightCanvas.getContext("2d");
 
-  const dispCanvas = document.createElement("canvas");
-  dispCanvas.width = width;
-  dispCanvas.height = height;
-  const dtx = dispCanvas.getContext("2d");
+  const roughCanvas = document.createElement("canvas");
+  roughCanvas.width = width;
+  roughCanvas.height = height;
+  const rtx = roughCanvas.getContext("2d");
 
-  const mortarColor = "#140809";
+  const mortarColor = "#180c0c";
 
   ctx.fillStyle = mortarColor;
   ctx.fillRect(0, 0, width, height);
 
-  btx.fillStyle = "#707070";
-  btx.fillRect(0, 0, width, height);
+  htx.fillStyle = "#5d5d5d";
+  htx.fillRect(0, 0, width, height);
 
-  dtx.fillStyle = "#575757";
-  dtx.fillRect(0, 0, width, height);
+  rtx.fillStyle = "#dfdfdf";
+  rtx.fillRect(0, 0, width, height);
 
   const brickW = 128;
   const brickH = 52;
@@ -91,71 +215,142 @@ function createBrickTextures() {
 
     for (let x = -brickW; x < width + brickW; x += brickW + mortar) {
       const px = x + offset;
+      const py = y;
 
-      const hue = 4 + Math.random() * 10;
-      const sat = 34 + Math.random() * 18;
-      const light = 14 + Math.random() * 7;
+      const hue = 7 + Math.random() * 7;
+      const sat = 22 + Math.random() * 16;
+      const light = 18 + Math.random() * 9;
 
-      ctx.fillStyle = `hsl(${hue} ${sat}% ${light}%)`;
-      ctx.fillRect(px, y, brickW, brickH);
+      const grad = ctx.createLinearGradient(px, py, px, py + brickH);
+      grad.addColorStop(0, `hsl(${hue} ${sat}% ${light + 3}%)`);
+      grad.addColorStop(0.5, `hsl(${hue + (Math.random() * 1.5 - 0.75)} ${sat}% ${light}%)`);
+      grad.addColorStop(1, `hsl(${hue + 1} ${Math.max(12, sat - 2)}% ${Math.max(8, light - 4)}%)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(px, py, brickW, brickH);
 
-      ctx.fillStyle = "rgba(255,220,210,0.035)";
-      ctx.fillRect(px, y, brickW, 4);
+      const broadShade = ctx.createRadialGradient(
+        px + brickW * 0.5,
+        py + brickH * 0.5,
+        brickW * 0.08,
+        px + brickW * 0.5,
+        py + brickH * 0.5,
+        brickW * 0.75
+      );
+      broadShade.addColorStop(0, "rgba(0,0,0,0)");
+      broadShade.addColorStop(1, "rgba(0,0,0,0.10)");
+      ctx.fillStyle = broadShade;
+      ctx.fillRect(px, py, brickW, brickH);
 
-      ctx.fillStyle = "rgba(0,0,0,0.24)";
-      ctx.fillRect(px, y + brickH - 6, brickW, 6);
+      ctx.fillStyle = "rgba(255,235,230,0.04)";
+      ctx.fillRect(px + 1, py + 1, brickW - 2, 2);
 
-      for (let i = 0; i < 18; i++) {
-        const nx = px + Math.random() * brickW;
-        const ny = y + Math.random() * brickH;
-        const a = 0.012 + Math.random() * 0.03;
-        ctx.fillStyle = `rgba(255,235,230,${a})`;
-        ctx.fillRect(nx, ny, 2, 2);
+      ctx.fillStyle = "rgba(0,0,0,0.16)";
+      ctx.fillRect(px, py + brickH - 3, brickW, 3);
+
+      for (let i = 0; i < 5; i += 1) {
+        drawSoftBlob(
+          ctx,
+          px + 12 + Math.random() * (brickW - 24),
+          py + 10 + Math.random() * (brickH - 20),
+          8 + Math.random() * 18,
+          5 + Math.random() * 10,
+          [
+            [0, `rgba(255,220,210,${0.018 + Math.random() * 0.018})`],
+            [1, "rgba(255,220,210,0)"],
+          ]
+        );
       }
 
-      btx.fillStyle = "#e2e2e2";
-      btx.fillRect(px, y, brickW, brickH);
-      btx.fillStyle = "#f4f4f4";
-      btx.fillRect(px + 1, y + 1, brickW - 2, 2);
-      btx.fillStyle = "#999999";
-      btx.fillRect(px, y + brickH - 3, brickW, 3);
+      for (let i = 0; i < 4; i += 1) {
+        drawSoftBlob(
+          ctx,
+          px + 12 + Math.random() * (brickW - 24),
+          py + 10 + Math.random() * (brickH - 20),
+          8 + Math.random() * 18,
+          5 + Math.random() * 10,
+          [
+            [0, `rgba(0,0,0,${0.018 + Math.random() * 0.02})`],
+            [1, "rgba(0,0,0,0)"],
+          ]
+        );
+      }
 
-      dtx.fillStyle = "#f3f3f3";
-      dtx.fillRect(px, y, brickW, brickH);
-      dtx.fillStyle = "#fbfbfb";
-      dtx.fillRect(px + 1, y + 1, brickW - 2, 2);
-      dtx.fillStyle = "#a0a0a0";
-      dtx.fillRect(px, y + brickH - 3, brickW, 3);
+      for (let i = 0; i < 18; i += 1) {
+        const nx = px + Math.random() * brickW;
+        const ny = py + Math.random() * brickH;
+        ctx.fillStyle = `rgba(255,240,235,${0.01 + Math.random() * 0.018})`;
+        ctx.fillRect(nx, ny, 1.5, 1.5);
+      }
+
+      htx.fillStyle = "#cbcbcb";
+      htx.fillRect(px, py, brickW, brickH);
+
+      htx.fillStyle = "#dadada";
+      htx.fillRect(px + 1, py + 1, brickW - 2, 2);
+
+      htx.fillStyle = "#afafaf";
+      htx.fillRect(px, py + brickH - 3, brickW, 3);
+
+      for (let i = 0; i < 4; i += 1) {
+        drawSoftBlob(
+          htx,
+          px + 12 + Math.random() * (brickW - 24),
+          py + 10 + Math.random() * (brickH - 20),
+          6 + Math.random() * 12,
+          4 + Math.random() * 8,
+          [
+            [0, `rgba(220,220,220,${0.10 + Math.random() * 0.08})`],
+            [1, "rgba(220,220,220,0)"],
+          ]
+        );
+      }
+
+      const roughBase = 160 + Math.floor(Math.random() * 18);
+      rtx.fillStyle = `rgb(${roughBase},${roughBase},${roughBase})`;
+      rtx.fillRect(px, py, brickW, brickH);
+
+      for (let i = 0; i < 4; i += 1) {
+        const value = 138 + Math.floor(Math.random() * 24);
+        drawSoftBlob(
+          rtx,
+          px + 12 + Math.random() * (brickW - 24),
+          py + 10 + Math.random() * (brickH - 20),
+          8 + Math.random() * 20,
+          5 + Math.random() * 10,
+          [
+            [0, `rgba(${value},${value},${value},0.32)`],
+            [1, `rgba(${value},${value},${value},0)`],
+          ]
+        );
+      }
     }
   }
 
   for (let y = brickH; y < height; y += rowStep) {
-    btx.fillStyle = "#3f3f3f";
-    btx.fillRect(0, y, width, mortar);
+    htx.fillStyle = "#666666";
+    htx.fillRect(0, y, width, mortar);
 
-    dtx.fillStyle = "#161616";
-    dtx.fillRect(0, y, width, mortar);
+    rtx.fillStyle = "#eeeeee";
+    rtx.fillRect(0, y, width, mortar);
   }
 
-  const colorMap = new THREE.CanvasTexture(colorCanvas);
-  colorMap.wrapS = THREE.ClampToEdgeWrapping;
-  colorMap.wrapT = THREE.ClampToEdgeWrapping;
-  colorMap.repeat.set(1, 1);
-  colorMap.anisotropy = 8;
+  addSpeckleNoise(ctx, width, height, 2200, 0.004, 0.014, false);
+  addSpeckleNoise(ctx, width, height, 1800, 0.004, 0.012, true);
 
-  const bumpMap = new THREE.CanvasTexture(bumpCanvas);
-  bumpMap.wrapS = THREE.ClampToEdgeWrapping;
-  bumpMap.wrapT = THREE.ClampToEdgeWrapping;
-  bumpMap.repeat.set(1, 1);
-  bumpMap.anisotropy = 8;
+  addSpeckleNoise(rtx, width, height, 1600, 0.012, 0.032, true);
 
-  const displacementMap = new THREE.CanvasTexture(dispCanvas);
-  displacementMap.wrapS = THREE.ClampToEdgeWrapping;
-  displacementMap.wrapT = THREE.ClampToEdgeWrapping;
-  displacementMap.repeat.set(1, 1);
-  displacementMap.anisotropy = 8;
+  const colorMap = createColorTextureFromCanvas(colorCanvas);
+  const bumpMap = createDataTextureFromCanvas(heightCanvas);
+  const roughnessMap = createDataTextureFromCanvas(roughCanvas);
+  const normalMap = createNormalMapFromHeightCanvas(heightCanvas, 2.7);
 
-  return { colorMap, bumpMap, displacementMap, mortarColor };
+  return {
+    colorMap,
+    bumpMap,
+    roughnessMap,
+    normalMap,
+    mortarColor,
+  };
 }
 
 function createCheckerFloorTextures() {
@@ -167,26 +362,26 @@ function createCheckerFloorTextures() {
   colorCanvas.height = height;
   const ctx = colorCanvas.getContext("2d");
 
-  const bumpCanvas = document.createElement("canvas");
-  bumpCanvas.width = width;
-  bumpCanvas.height = height;
-  const btx = bumpCanvas.getContext("2d");
+  const heightCanvas = document.createElement("canvas");
+  heightCanvas.width = width;
+  heightCanvas.height = height;
+  const htx = heightCanvas.getContext("2d");
 
-  const dispCanvas = document.createElement("canvas");
-  dispCanvas.width = width;
-  dispCanvas.height = height;
-  const dtx = dispCanvas.getContext("2d");
+  const roughCanvas = document.createElement("canvas");
+  roughCanvas.width = width;
+  roughCanvas.height = height;
+  const rtx = roughCanvas.getContext("2d");
 
-  const groutColor = "#140809";
+  const groutColor = "#171314";
 
   ctx.fillStyle = groutColor;
   ctx.fillRect(0, 0, width, height);
 
-  btx.fillStyle = "#9d9d9d";
-  btx.fillRect(0, 0, width, height);
+  htx.fillStyle = "#8e8e8e";
+  htx.fillRect(0, 0, width, height);
 
-  dtx.fillStyle = "#909090";
-  dtx.fillRect(0, 0, width, height);
+  rtx.fillStyle = "#f0f0f0";
+  rtx.fillRect(0, 0, width, height);
 
   const tile = 105;
   const grout = 5;
@@ -198,86 +393,160 @@ function createCheckerFloorTextures() {
       const x = col * tile;
       const y = row * tile;
 
-      const isLight = (row + col) % 2 === 0;
-      const shade = isLight ? 76 + Math.random() * 4 : 16 + Math.random() * 3.5;
-
       const tileX = x + grout / 2;
       const tileY = y + grout / 2;
       const tileW = tile - grout;
       const tileH = tile - grout;
 
-      ctx.fillStyle = `hsl(0 0% ${shade}%)`;
+      const isLight = (row + col) % 2 === 0;
+      const base = isLight ? 72 + Math.random() * 5 : 14 + Math.random() * 4;
+
+      const grad = ctx.createLinearGradient(tileX, tileY, tileX + tileW, tileY + tileH);
+      grad.addColorStop(0, `hsl(0 0% ${base + 2}%)`);
+      grad.addColorStop(0.52, `hsl(0 0% ${base}%)`);
+      grad.addColorStop(1, `hsl(0 0% ${Math.max(2, base - 2.5)}%)`);
+      ctx.fillStyle = grad;
       ctx.fillRect(tileX, tileY, tileW, tileH);
 
-      const topGrad = ctx.createLinearGradient(tileX, tileY, tileX, tileY + 18);
-      topGrad.addColorStop(0, "rgba(255,255,255,0.12)");
-      topGrad.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = topGrad;
-      ctx.fillRect(tileX, tileY, tileW, 18);
+      const topGlow = ctx.createLinearGradient(tileX, tileY, tileX, tileY + 24);
+      topGlow.addColorStop(0, "rgba(255,255,255,0.08)");
+      topGlow.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = topGlow;
+      ctx.fillRect(tileX, tileY, tileW, 24);
 
-      const diagGrad = ctx.createLinearGradient(
-        tileX,
-        tileY,
-        tileX + tileW,
-        tileY + tileH
-      );
-      diagGrad.addColorStop(0.16, "rgba(255,255,255,0)");
-      diagGrad.addColorStop(0.44, "rgba(255,255,255,0.075)");
-      diagGrad.addColorStop(0.56, "rgba(255,255,255,0.03)");
-      diagGrad.addColorStop(0.78, "rgba(255,255,255,0)");
-      ctx.fillStyle = diagGrad;
+      const diagSoft = ctx.createLinearGradient(tileX, tileY, tileX + tileW, tileY + tileH);
+      diagSoft.addColorStop(0.15, "rgba(255,255,255,0)");
+      diagSoft.addColorStop(0.42, "rgba(255,255,255,0.032)");
+      diagSoft.addColorStop(0.68, "rgba(255,255,255,0)");
+      ctx.fillStyle = diagSoft;
       ctx.fillRect(tileX, tileY, tileW, tileH);
 
-      ctx.fillStyle = "rgba(255,255,255,0.07)";
-      ctx.fillRect(tileX, tileY, tileW, 2);
+      ctx.fillStyle = "rgba(255,255,255,0.03)";
+      ctx.fillRect(tileX, tileY, tileW, 1.5);
 
-      ctx.fillStyle = "rgba(0,0,0,0.14)";
-      ctx.fillRect(tileX, tileY + tileH - 2, tileW, 2);
-      ctx.fillRect(tileX + tileW - 2, tileY, 2, tileH);
+      ctx.fillStyle = "rgba(0,0,0,0.10)";
+      ctx.fillRect(tileX, tileY + tileH - 1.5, tileW, 1.5);
+      ctx.fillRect(tileX + tileW - 1.5, tileY, 1.5, tileH);
 
-      for (let i = 0; i < 16; i++) {
-        const nx = tileX + Math.random() * tileW;
-        const ny = tileY + Math.random() * tileH;
-        const a = 0.007 + Math.random() * 0.014;
-        ctx.fillStyle = `rgba(255,255,255,${a})`;
-        ctx.fillRect(nx, ny, 2, 2);
+      for (let i = 0; i < 3; i += 1) {
+        drawSoftBlob(
+          ctx,
+          tileX + 10 + Math.random() * (tileW - 20),
+          tileY + 10 + Math.random() * (tileH - 20),
+          12 + Math.random() * 28,
+          8 + Math.random() * 18,
+          [
+            [0, `rgba(255,255,255,${0.008 + Math.random() * 0.012})`],
+            [1, "rgba(255,255,255,0)"],
+          ]
+        );
       }
 
-      btx.fillStyle = "#d8d8d8";
-      btx.fillRect(tileX, tileY, tileW, tileH);
+      for (let i = 0; i < 2; i += 1) {
+        drawSoftBlob(
+          ctx,
+          tileX + 10 + Math.random() * (tileW - 20),
+          tileY + 10 + Math.random() * (tileH - 20),
+          10 + Math.random() * 22,
+          7 + Math.random() * 16,
+          [
+            [0, `rgba(0,0,0,${0.01 + Math.random() * 0.014})`],
+            [1, "rgba(0,0,0,0)"],
+          ]
+        );
+      }
 
-      btx.fillStyle = "#8b8b8b";
-      btx.fillRect(x, y, tile, grout);
-      btx.fillRect(x, y, grout, tile);
+      drawFineScratches(ctx, tileX, tileY, tileW, tileH, 5, 0.022);
 
-      dtx.fillStyle = "#e8e8e8";
-      dtx.fillRect(tileX, tileY, tileW, tileH);
+      for (let i = 0; i < 12; i += 1) {
+        const nx = tileX + Math.random() * tileW;
+        const ny = tileY + Math.random() * tileH;
+        ctx.fillStyle = `rgba(255,255,255,${0.006 + Math.random() * 0.012})`;
+        ctx.fillRect(nx, ny, 1.2, 1.2);
+      }
 
-      dtx.fillStyle = "#7c7c7c";
-      dtx.fillRect(x, y, tile, grout);
-      dtx.fillRect(x, y, grout, tile);
+      htx.fillStyle = "#cfcfcf";
+      htx.fillRect(tileX, tileY, tileW, tileH);
+
+      htx.fillStyle = "#dbdbdb";
+      htx.fillRect(tileX, tileY, tileW, 2);
+
+      htx.fillStyle = "#adadad";
+      htx.fillRect(tileX, tileY + tileH - 2, tileW, 2);
+      htx.fillRect(tileX + tileW - 2, tileY, 2, tileH);
+
+      htx.fillStyle = "#767676";
+      htx.fillRect(x, y, tile, grout);
+      htx.fillRect(x, y, grout, tile);
+
+      for (let i = 0; i < 2; i += 1) {
+        drawSoftBlob(
+          htx,
+          tileX + 10 + Math.random() * (tileW - 20),
+          tileY + 10 + Math.random() * (tileH - 20),
+          10 + Math.random() * 20,
+          6 + Math.random() * 12,
+          [
+            [0, "rgba(215,215,215,0.08)"],
+            [1, "rgba(215,215,215,0)"],
+          ]
+        );
+      }
+
+      const roughBase = isLight
+        ? 74 + Math.floor(Math.random() * 14)
+        : 90 + Math.floor(Math.random() * 16);
+
+      rtx.fillStyle = `rgb(${roughBase},${roughBase},${roughBase})`;
+      rtx.fillRect(tileX, tileY, tileW, tileH);
+
+      for (let i = 0; i < 3; i += 1) {
+        const value = 48 + Math.floor(Math.random() * 24);
+        drawSoftBlob(
+          rtx,
+          tileX + 12 + Math.random() * (tileW - 24),
+          tileY + 10 + Math.random() * (tileH - 20),
+          12 + Math.random() * 26,
+          8 + Math.random() * 16,
+          [
+            [0, `rgba(${value},${value},${value},0.24)`],
+            [1, `rgba(${value},${value},${value},0)`],
+          ]
+        );
+      }
+
+      for (let i = 0; i < 2; i += 1) {
+        const value = 108 + Math.floor(Math.random() * 22);
+        drawSoftBlob(
+          rtx,
+          tileX + 12 + Math.random() * (tileW - 24),
+          tileY + 10 + Math.random() * (tileH - 20),
+          10 + Math.random() * 18,
+          8 + Math.random() * 14,
+          [
+            [0, `rgba(${value},${value},${value},0.14)`],
+            [1, `rgba(${value},${value},${value},0)`],
+          ]
+        );
+      }
     }
   }
 
-  const colorMap = new THREE.CanvasTexture(colorCanvas);
-  colorMap.wrapS = THREE.ClampToEdgeWrapping;
-  colorMap.wrapT = THREE.ClampToEdgeWrapping;
-  colorMap.repeat.set(1, 1);
-  colorMap.anisotropy = 8;
+  addSpeckleNoise(ctx, width, height, 2200, 0.003, 0.01, false);
+  addSpeckleNoise(ctx, width, height, 1600, 0.003, 0.008, true);
+  addSpeckleNoise(rtx, width, height, 1800, 0.01, 0.024, true);
 
-  const bumpMap = new THREE.CanvasTexture(bumpCanvas);
-  bumpMap.wrapS = THREE.ClampToEdgeWrapping;
-  bumpMap.wrapT = THREE.ClampToEdgeWrapping;
-  bumpMap.repeat.set(1, 1);
-  bumpMap.anisotropy = 8;
+  const colorMap = createColorTextureFromCanvas(colorCanvas);
+  const bumpMap = createDataTextureFromCanvas(heightCanvas);
+  const roughnessMap = createDataTextureFromCanvas(roughCanvas);
+  const normalMap = createNormalMapFromHeightCanvas(heightCanvas, 2.2);
 
-  const displacementMap = new THREE.CanvasTexture(dispCanvas);
-  displacementMap.wrapS = THREE.ClampToEdgeWrapping;
-  displacementMap.wrapT = THREE.ClampToEdgeWrapping;
-  displacementMap.repeat.set(1, 1);
-  displacementMap.anisotropy = 8;
-
-  return { colorMap, bumpMap, displacementMap };
+  return {
+    colorMap,
+    bumpMap,
+    roughnessMap,
+    normalMap,
+  };
 }
 
 function createSoftBeamTexture() {
@@ -364,20 +633,20 @@ function BrickMaterial({
     if (!materialRef.current) return;
 
     const t = state.clock.getElapsedTime();
-    let emissiveIntensity = 0.12;
+    let emissiveIntensity = 0.08;
 
-    if (powerState === "intro") emissiveIntensity = 0.16;
+    if (powerState === "intro") emissiveIntensity = 0.11;
 
     if (powerState === "flicker") {
       emissiveIntensity =
         Math.sin(t * 34) > 0.35
-          ? 0.15
+          ? 0.1
           : Math.sin(t * 18) > -0.1
-            ? 0.06
-            : 0.02;
+            ? 0.045
+            : 0.018;
     }
 
-    if (powerState === "lamp") emissiveIntensity = 0.04;
+    if (powerState === "lamp") emissiveIntensity = 0.025;
 
     materialRef.current.emissiveIntensity = emissiveIntensity;
   });
@@ -387,15 +656,15 @@ function BrickMaterial({
       ref={materialRef}
       map={textures.colorMap}
       bumpMap={textures.bumpMap}
-      bumpScale={0.36}
-      displacementMap={textures.displacementMap}
-      displacementScale={0.52}
-      displacementBias={-0.03}
+      bumpScale={0.08}
+      normalMap={textures.normalMap}
+      normalScale={new THREE.Vector2(0.65, 0.65)}
+      roughnessMap={textures.roughnessMap}
       color={color}
-      roughness={0.96}
+      roughness={0.95}
       metalness={0}
       emissive={emissive}
-      emissiveIntensity={0.12}
+      emissiveIntensity={0.08}
     />
   );
 }
@@ -406,7 +675,7 @@ function BackWall({ powerState }) {
 
   return (
     <mesh position={[0, 0.15, -12.8]} receiveShadow>
-      <planeGeometry args={[34, 18, 280, 170]} />
+      <planeGeometry args={[34, 18, 1, 1]} />
       <BrickMaterial
         powerState={powerState}
         textures={textures}
@@ -428,20 +697,20 @@ function SideWalls({ powerState }) {
     const t = state.clock.getElapsedTime();
 
     refs.forEach((mat) => {
-      let emissiveIntensity = 0.06;
+      let emissiveIntensity = 0.04;
 
-      if (powerState === "intro") emissiveIntensity = 0.09;
+      if (powerState === "intro") emissiveIntensity = 0.06;
 
       if (powerState === "flicker") {
         emissiveIntensity =
           Math.sin(t * 28) > 0.3
-            ? 0.085
+            ? 0.06
             : Math.sin(t * 16) > -0.05
-              ? 0.04
-              : 0.012;
+              ? 0.028
+              : 0.01;
       }
 
-      if (powerState === "lamp") emissiveIntensity = 0.024;
+      if (powerState === "lamp") emissiveIntensity = 0.018;
 
       mat.emissiveIntensity = emissiveIntensity;
     });
@@ -454,20 +723,20 @@ function SideWalls({ powerState }) {
         rotation={[0, Math.PI / 2, 0]}
         receiveShadow
       >
-        <planeGeometry args={[18.6, 18, 180, 160]} />
+        <planeGeometry args={[18.6, 18, 1, 1]} />
         <meshStandardMaterial
           ref={leftRef}
           map={textures.colorMap}
           bumpMap={textures.bumpMap}
-          bumpScale={0.34}
-          displacementMap={textures.displacementMap}
-          displacementScale={0.48}
-          displacementBias={-0.03}
+          bumpScale={0.08}
+          normalMap={textures.normalMap}
+          normalScale={new THREE.Vector2(0.62, 0.62)}
+          roughnessMap={textures.roughnessMap}
           color="#9f625c"
-          roughness={0.97}
+          roughness={0.96}
           metalness={0}
           emissive="#241011"
-          emissiveIntensity={0.06}
+          emissiveIntensity={0.04}
           side={THREE.DoubleSide}
         />
       </mesh>
@@ -477,20 +746,20 @@ function SideWalls({ powerState }) {
         rotation={[0, -Math.PI / 2, 0]}
         receiveShadow
       >
-        <planeGeometry args={[18.6, 18, 180, 160]} />
+        <planeGeometry args={[18.6, 18, 1, 1]} />
         <meshStandardMaterial
           ref={rightRef}
           map={textures.colorMap}
           bumpMap={textures.bumpMap}
-          bumpScale={0.34}
-          displacementMap={textures.displacementMap}
-          displacementScale={0.48}
-          displacementBias={-0.03}
+          bumpScale={0.08}
+          normalMap={textures.normalMap}
+          normalScale={new THREE.Vector2(0.62, 0.62)}
+          roughnessMap={textures.roughnessMap}
           color="#9f625c"
-          roughness={0.97}
+          roughness={0.96}
           metalness={0}
           emissive="#241011"
-          emissiveIntensity={0.06}
+          emissiveIntensity={0.04}
           side={THREE.DoubleSide}
         />
       </mesh>
@@ -507,19 +776,19 @@ function Floor() {
       rotation={[-Math.PI / 2, 0, 0]}
       receiveShadow
     >
-      <planeGeometry args={[42, 34, 340, 260]} />
+      <planeGeometry args={[42, 34, 1, 1]} />
       <meshPhysicalMaterial
         map={tile.colorMap}
         bumpMap={tile.bumpMap}
-        bumpScale={0.17}
-        displacementMap={tile.displacementMap}
-        displacementScale={0.06}
-        displacementBias={-0.008}
+        bumpScale={0.045}
+        normalMap={tile.normalMap}
+        normalScale={new THREE.Vector2(0.52, 0.52)}
+        roughnessMap={tile.roughnessMap}
         color="#ffffff"
-        roughness={0.04}
+        roughness={0.11}
         metalness={0}
         clearcoat={1}
-        clearcoatRoughness={0.02}
+        clearcoatRoughness={0.1}
         reflectivity={1}
         ior={1.52}
       />
