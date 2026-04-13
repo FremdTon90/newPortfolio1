@@ -315,6 +315,40 @@ function createSoftBeamTexture() {
   return tex;
 }
 
+function createGlowTexture() {
+  const size = 1024;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+
+  const gradient = ctx.createRadialGradient(
+    size / 2,
+    size / 2,
+    size * 0.04,
+    size / 2,
+    size / 2,
+    size * 0.5
+  );
+
+  gradient.addColorStop(0, "rgba(255,120,100,1)");
+  gradient.addColorStop(0.08, "rgba(255,105,90,0.95)");
+  gradient.addColorStop(0.22, "rgba(255,82,72,0.68)");
+  gradient.addColorStop(0.42, "rgba(255,66,60,0.3)");
+  gradient.addColorStop(0.68, "rgba(255,54,48,0.1)");
+  gradient.addColorStop(1, "rgba(255,44,40,0)");
+
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /* -----------------------------
    Scene parts
 ----------------------------- */
@@ -599,12 +633,18 @@ function NeonArrowSign({ visible }) {
   const rootRef = useRef(null);
   const signRef = useRef(null);
   const wallGlowRef = useRef(null);
+  const wallGlowOuterRef = useRef(null);
+  const floorGlowRef = useRef(null);
+
   const redWallLightRef = useRef(null);
   const redFloorLightRef = useRef(null);
   const redFrontLightRef = useRef(null);
   const redTextSpillRef = useRef(null);
+  const redRoomFillRef = useRef(null);
+  const redUpperBounceRef = useRef(null);
 
   const { scene } = useGLTF(SIGN_URL);
+  const glowTexture = useMemo(() => createGlowTexture(), []);
 
   const signScene = useMemo(() => {
     const cloned = scene.clone(true);
@@ -638,9 +678,9 @@ function NeonArrowSign({ visible }) {
         nextMaterial = new THREE.MeshStandardMaterial({
           map: hasMap ? sourceMaterial.map : null,
           color: hasMap ? "#ffffff" : baseColor,
-          emissive: new THREE.Color("#ff6a5a"),
-          emissiveIntensity: 6.8,
-          roughness: 0.14,
+          emissive: new THREE.Color("#ff5a47"),
+          emissiveIntensity: 11.5,
+          roughness: 0.08,
           metalness: 0.02,
           transparent: sourceMaterial.transparent ?? false,
           opacity: sourceMaterial.opacity ?? 1,
@@ -755,7 +795,7 @@ function NeonArrowSign({ visible }) {
               mat.emissive.r > mat.emissive.g * 1.08 &&
               mat.emissive.r > mat.emissive.b * 1.08;
 
-            const baseTarget = isRedish ? 7.2 * flicker : 0.45;
+            const baseTarget = isRedish ? 12.8 * flicker : 0.45;
             mat.emissiveIntensity = THREE.MathUtils.damp(
               mat.emissiveIntensity ?? 0,
               visible ? baseTarget : 0,
@@ -770,7 +810,25 @@ function NeonArrowSign({ visible }) {
     if (wallGlowRef.current?.material) {
       wallGlowRef.current.material.opacity = THREE.MathUtils.damp(
         wallGlowRef.current.material.opacity,
+        visible ? 0.62 * flicker : 0,
+        8,
+        delta
+      );
+    }
+
+    if (wallGlowOuterRef.current?.material) {
+      wallGlowOuterRef.current.material.opacity = THREE.MathUtils.damp(
+        wallGlowOuterRef.current.material.opacity,
         visible ? 0.28 * flicker : 0,
+        8,
+        delta
+      );
+    }
+
+    if (floorGlowRef.current?.material) {
+      floorGlowRef.current.material.opacity = THREE.MathUtils.damp(
+        floorGlowRef.current.material.opacity,
+        visible ? 0.22 * flicker : 0,
         8,
         delta
       );
@@ -779,7 +837,7 @@ function NeonArrowSign({ visible }) {
     if (redWallLightRef.current) {
       redWallLightRef.current.intensity = THREE.MathUtils.damp(
         redWallLightRef.current.intensity,
-        visible ? 4.2 * flicker : 0,
+        visible ? 8.8 * flicker : 0,
         8,
         delta
       );
@@ -788,7 +846,7 @@ function NeonArrowSign({ visible }) {
     if (redFloorLightRef.current) {
       redFloorLightRef.current.intensity = THREE.MathUtils.damp(
         redFloorLightRef.current.intensity,
-        visible ? 3.1 * flicker : 0,
+        visible ? 6.6 * flicker : 0,
         8,
         delta
       );
@@ -797,7 +855,7 @@ function NeonArrowSign({ visible }) {
     if (redFrontLightRef.current) {
       redFrontLightRef.current.intensity = THREE.MathUtils.damp(
         redFrontLightRef.current.intensity,
-        visible ? 2.1 * flicker : 0,
+        visible ? 3.8 * flicker : 0,
         8,
         delta
       );
@@ -806,7 +864,25 @@ function NeonArrowSign({ visible }) {
     if (redTextSpillRef.current) {
       redTextSpillRef.current.intensity = THREE.MathUtils.damp(
         redTextSpillRef.current.intensity,
-        visible ? 1.55 * flicker : 0,
+        visible ? 2.75 * flicker : 0,
+        8,
+        delta
+      );
+    }
+
+    if (redRoomFillRef.current) {
+      redRoomFillRef.current.intensity = THREE.MathUtils.damp(
+        redRoomFillRef.current.intensity,
+        visible ? 2.6 * flicker : 0,
+        8,
+        delta
+      );
+    }
+
+    if (redUpperBounceRef.current) {
+      redUpperBounceRef.current.intensity = THREE.MathUtils.damp(
+        redUpperBounceRef.current.intensity,
+        visible ? 2.15 * flicker : 0,
         8,
         delta
       );
@@ -820,14 +896,47 @@ function NeonArrowSign({ visible }) {
       rotation={[0, Math.PI + 0.22, 0]}
       scale={0.82}
     >
-      <mesh ref={wallGlowRef} position={[0, 0, -0.18]} renderOrder={2}>
-        <planeGeometry args={[4.8, 2.8]} />
+      <mesh ref={wallGlowOuterRef} position={[0, 0, -0.26]} renderOrder={1}>
+        <planeGeometry args={[7.6, 4.8]} />
         <meshBasicMaterial
-          color="#ff5448"
+          map={glowTexture}
+          color="#ff4338"
           transparent
           opacity={0}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+
+      <mesh ref={wallGlowRef} position={[0, 0, -0.2]} renderOrder={2}>
+        <planeGeometry args={[5.8, 3.6]} />
+        <meshBasicMaterial
+          map={glowTexture}
+          color="#ff5a4d"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+
+      <mesh
+        ref={floorGlowRef}
+        position={[0.05, -0.92, 0.45]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        renderOrder={2}
+      >
+        <planeGeometry args={[4.8, 3.1]} />
+        <meshBasicMaterial
+          map={glowTexture}
+          color="#ff4a3d"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
         />
       </mesh>
 
@@ -841,29 +950,29 @@ function NeonArrowSign({ visible }) {
 
       <pointLight
         ref={redWallLightRef}
-        position={[0, 0, -0.55]}
-        color="#ff4d4d"
+        position={[0, 0, -0.5]}
+        color="#ff5144"
         intensity={0}
-        distance={14}
-        decay={1.18}
+        distance={20}
+        decay={1.02}
       />
 
       <pointLight
         ref={redFloorLightRef}
         position={[0, -0.78, 0.42]}
-        color="#ff4d4d"
+        color="#ff4d42"
         intensity={0}
-        distance={13}
-        decay={1.18}
+        distance={18}
+        decay={1.06}
       />
 
       <pointLight
         ref={redFrontLightRef}
-        position={[0, 0.02, 0.46]}
-        color="#ff7a68"
+        position={[0, 0.04, 0.52]}
+        color="#ff7d70"
         intensity={0}
-        distance={10}
-        decay={1.5}
+        distance={13}
+        decay={1.25}
       />
 
       <pointLight
@@ -871,8 +980,26 @@ function NeonArrowSign({ visible }) {
         position={[-1.35, 0.05, -0.1]}
         color="#ff6155"
         intensity={0}
-        distance={10}
-        decay={1.3}
+        distance={14}
+        decay={1.1}
+      />
+
+      <pointLight
+        ref={redRoomFillRef}
+        position={[1.1, 0.25, -1.4]}
+        color="#ff3e36"
+        intensity={0}
+        distance={26}
+        decay={0.95}
+      />
+
+      <pointLight
+        ref={redUpperBounceRef}
+        position={[0.1, 1.1, -0.7]}
+        color="#ff7062"
+        intensity={0}
+        distance={16}
+        decay={1.05}
       />
     </group>
   );
@@ -1196,7 +1323,7 @@ function PowerLights({ powerState, pointer, showArrow }) {
     edgeTarget.updateMatrixWorld(true);
 
     if (neonBounceRef.current) {
-      const target = showArrow ? 1.18 : 0;
+      const target = showArrow ? 2.1 : 0;
       neonBounceRef.current.intensity = THREE.MathUtils.damp(
         neonBounceRef.current.intensity,
         target,
@@ -1206,7 +1333,7 @@ function PowerLights({ powerState, pointer, showArrow }) {
     }
 
     if (neonEdgeRef.current) {
-      const target = showArrow ? 118 : 0;
+      const target = showArrow ? 180 : 0;
       neonEdgeRef.current.intensity = THREE.MathUtils.damp(
         neonEdgeRef.current.intensity,
         target,
@@ -1234,8 +1361,8 @@ function PowerLights({ powerState, pointer, showArrow }) {
         position={[11.45, 0.48, -10.85]}
         color="#ff3b3b"
         intensity={0}
-        distance={15}
-        decay={1.38}
+        distance={18}
+        decay={1.05}
       />
 
       <spotLight
@@ -1243,10 +1370,10 @@ function PowerLights({ powerState, pointer, showArrow }) {
         position={[9.8, 0.95, -10.6]}
         color="#ff4545"
         intensity={0}
-        angle={0.12}
+        angle={0.18}
         penumbra={1}
-        distance={18}
-        decay={1.55}
+        distance={24}
+        decay={1.2}
       />
 
       <spotLight
@@ -1372,6 +1499,7 @@ export default function HeroSection() {
             gl={{
               antialias: true,
               physicallyCorrectLights: true,
+              toneMappingExposure: 1.18,
             }}
           >
             <Suspense fallback={null}>
