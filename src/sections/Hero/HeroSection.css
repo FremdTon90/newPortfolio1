@@ -10,7 +10,6 @@
     isolation: isolate;
 }
 
-/* Canvas Layer */
 .hero-canvas-wrap {
     position: absolute;
     inset: 0;
@@ -23,23 +22,18 @@
     height: 100%;
 }
 
-/* UI Overlay */
 .hero-overlay-ui {
     position: relative;
     z-index: 3;
     min-height: 100svh;
     width: min(1600px, 100%);
     margin: 0 auto;
-    padding:
-        clamp(28px, 4vw, 40px)
-        var(--hero-side)
-        clamp(44px, 5vw, 56px);
+    padding: clamp(28px, 4vw, 40px) var(--hero-side) clamp(44px, 5vw, 56px);
     display: flex;
     flex-direction: column;
     pointer-events: none;
 }
 
-/* Badges */
 .hero-badge-row {
     display: flex;
     justify-content: center;
@@ -57,49 +51,39 @@
     color: #e2ebff;
     font-size: 0.92rem;
     font-weight: 500;
+    letter-spacing: 0.01em;
     backdrop-filter: blur(14px);
     box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18);
-
     opacity: 0;
     transform: translateY(-10px);
     filter: blur(6px);
     animation: badgeFadeIn 0.55s ease 0.06s forwards;
 }
 
-/* Scroll Indicator */
 .hero-scroll {
     position: absolute;
     right: var(--hero-side);
     bottom: clamp(16px, 2vw, 26px);
     z-index: 5;
-
     display: flex;
     align-items: center;
     gap: 10px;
-
     color: rgba(183, 200, 234, 0.78);
     font-size: 0.82rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-
     opacity: 0;
     transform: translateY(12px);
     animation: fadeUpSoft 0.65s ease 1.15s forwards;
-
     pointer-events: auto;
 }
 
 .hero-scroll-line {
     width: 72px;
     height: 1px;
-    background: linear-gradient(
-        90deg,
-        rgba(143, 243, 255, 0.22),
-        rgba(143, 243, 255, 0.92)
-    );
+    background: linear-gradient(90deg, rgba(143, 243, 255, 0.22), rgba(143, 243, 255, 0.92));
 }
 
-/* Lighting Overlay */
 .hero.hero-power-flicker::after,
 .hero.hero-power-lamp::after {
     content: "";
@@ -107,33 +91,49 @@
     inset: 0;
     z-index: 2;
     pointer-events: none;
-
     background:
         radial-gradient(circle at 50% 46%, rgba(126, 232, 255, 0.05), transparent 30%),
-        linear-gradient(180deg, rgba(0,0,0,0.04), rgba(0,0,0,0.18));
+        linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.18));
 }
 
 .hero.hero-power-flicker::after {
     animation: powerFailOverlay 0.75s steps(1, end) forwards;
 }
 
-/* Mobile Optimierung */
-@media (max-width: 768px) {
-    .hero.hero-3d {
-        --hero-side: 16px;
-    }
-
-    .hero-badge {
-        padding: 8px 12px;
-        font-size: 0.8rem;
-    }
-
-    .hero-scroll {
-        display: none;
-    }
+.hero.hero-power-lamp .hero-scroll {
+    opacity: 0.62;
+    color: rgba(183, 200, 234, 0.7);
 }
 
-/* Animationen */
+.hero-fallback {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+    color: #e2ebff;
+    background: linear-gradient(180deg, #02050b 0%, #050816 58%, #07101f 100%);
+}
+
+.hero-fallback-title {
+    font-size: clamp(1.2rem, 2vw, 1.6rem);
+    font-weight: 700;
+}
+
+.hero-fallback-text {
+    color: rgba(226, 235, 255, 0.75);
+}
+
+.hero-fallback code {
+    color: #8ff3ff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 @keyframes badgeFadeIn {
     from {
         opacity: 0;
@@ -159,11 +159,83 @@
 }
 
 @keyframes powerFailOverlay {
-    0% { opacity: 0.18; }
-    12% { opacity: 0.04; }
-    24% { opacity: 0.2; }
-    40% { opacity: 0.08; }
-    57% { opacity: 0.24; }
-    71% { opacity: 0.03; }
-    100% { opacity: 0.18; }
+    0% {
+        opacity: 0.18;
+    }
+    12% {
+        opacity: 0.04;
+    }
+    24% {
+        opacity: 0.2;
+    }
+    40% {
+        opacity: 0.08;
+    }
+    57% {
+        opacity: 0.24;
+    }
+    71% {
+        opacity: 0.03;
+    }
+    100% {
+        opacity: 0.18;
+    }
+}
+
+@media (max-width: 768px) {
+    .hero.hero-3d {
+        --hero-side: 16px;
+    }
+
+    .hero-overlay-ui {
+        padding-top: 20px;
+        padding-bottom: 28px;
+    }
+
+    .hero-badge-row {
+        gap: 10px;
+    }
+
+    .hero-badge {
+        padding: 9px 13px;
+        font-size: 0.84rem;
+    }
+
+    .hero-scroll {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) and (orientation: portrait) {
+    .hero.hero-3d {
+        min-height: 100svh;
+    }
+
+    .hero-overlay-ui {
+        justify-content: flex-start;
+        padding-top: max(18px, env(safe-area-inset-top));
+    }
+
+    .hero-badge-row {
+        max-width: 100%;
+        gap: 8px;
+        padding-top: 4px;
+    }
+
+    .hero-badge {
+        font-size: 0.8rem;
+        padding: 8px 12px;
+    }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+    .hero-overlay-ui {
+        padding-top: 16px;
+        padding-bottom: 20px;
+    }
+
+    .hero-badge {
+        font-size: 0.78rem;
+        padding: 7px 11px;
+    }
 }

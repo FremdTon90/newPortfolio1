@@ -25,7 +25,7 @@ const SIGN_URL = `${import.meta.env.BASE_URL}models/neon_open_sign.glb`;
 const LAMP_WALL_URL = `${import.meta.env.BASE_URL}models/lampWall.glb`;
 
 const WALL_LAMP_CONFIG = {
-  lampPosition: [-16.96, 1.78, -8.45],
+  lampPosition: [-13.05, 1.78, -7.45],
   lampRotation: [0, Math.PI / 2, 0],
   lampScale: 2.5,
 
@@ -38,9 +38,9 @@ const WALL_LAMP_CONFIG = {
   bounceIntensity: 14,
   fillIntensity: 5.5,
 
-  bulbDistance: 20,
-  bounceDistance: 18,
-  fillDistance: 21,
+  bulbDistance: 17,
+  bounceDistance: 16,
+  fillDistance: 18,
 
   bulbDecay: 1.3,
   bounceDecay: 1.5,
@@ -84,9 +84,7 @@ class HeroCanvasErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <div className="hero-fallback">
-          <div className="hero-fallback-title">
-            3D Hero konnte nicht geladen werden
-          </div>
+          <div className="hero-fallback-title">3D Hero konnte nicht geladen werden</div>
           <div className="hero-fallback-text">
             Prüfe die Font-Datei unter <code>{FONT_URL}</code>.
           </div>
@@ -142,15 +140,7 @@ function drawSoftBlob(ctx, x, y, rx, ry, colorStops) {
   ctx.restore();
 }
 
-function addSpeckleNoise(
-  ctx,
-  width,
-  height,
-  count,
-  alphaMin,
-  alphaMax,
-  dark = false
-) {
+function addSpeckleNoise(ctx, width, height, count, alphaMin, alphaMax, dark = false) {
   for (let i = 0; i < count; i += 1) {
     const x = Math.random() * width;
     const y = Math.random() * height;
@@ -262,14 +252,8 @@ function createBrickTextures() {
 
       const grad = ctx.createLinearGradient(px, py, px, py + brickH);
       grad.addColorStop(0, `hsl(${hue} ${sat}% ${light + 3}%)`);
-      grad.addColorStop(
-        0.5,
-        `hsl(${hue + (Math.random() * 1.5 - 0.75)} ${sat}% ${light}%)`
-      );
-      grad.addColorStop(
-        1,
-        `hsl(${hue + 1} ${Math.max(12, sat - 2)}% ${Math.max(8, light - 4)}%)`
-      );
+      grad.addColorStop(0.5, `hsl(${hue + (Math.random() * 1.5 - 0.75)} ${sat}% ${light}%)`);
+      grad.addColorStop(1, `hsl(${hue + 1} ${Math.max(12, sat - 2)}% ${Math.max(8, light - 4)}%)`);
       ctx.fillStyle = grad;
       ctx.fillRect(px, py, brickW, brickH);
 
@@ -438,7 +422,7 @@ function createGlowTexture() {
 }
 
 /* -----------------------------
-   Geladene Wandtextur + prozedurale Detailmaps
+   Textures
 ----------------------------- */
 
 function useWallBrickTextures(repeatX = 1, repeatY = 1) {
@@ -468,7 +452,7 @@ function useWallBrickTextures(repeatX = 1, repeatY = 1) {
   }, [wallColorTexture, detailTextures, repeatX, repeatY]);
 }
 
-function useCheckerFloorTextures(repeatX = 6, repeatY = 5) {
+function useCheckerFloorTextures(repeatX = 6, repeatY = 4) {
   const [colorMap, normalMap, roughnessMap] = useTexture([
     CHECKER_FLOOR_DIFFUSE_URL,
     CHECKER_FLOOR_NORMAL_URL,
@@ -491,8 +475,8 @@ function useCheckerFloorTextures(repeatX = 6, repeatY = 5) {
 
     return {
       colorMap: setupTexture(colorMap, true),
-      normalMap: setupTexture(normalMap),
-      roughnessMap: setupTexture(roughnessMap),
+      normalMap: setupTexture(normalMap, false),
+      roughnessMap: setupTexture(roughnessMap, false),
     };
   }, [colorMap, normalMap, roughnessMap, repeatX, repeatY]);
 }
@@ -501,56 +485,28 @@ function useCheckerFloorTextures(repeatX = 6, repeatY = 5) {
    Camera
 ----------------------------- */
 
-function ResponsiveCamera({ viewportMode, portraitYaw }) {
+function ResponsiveCamera({ viewportMode }) {
   const { camera, size } = useThree();
 
-  const baseCameraConfig = useMemo(() => {
-    if (viewportMode === "mobile-landscape") {
-      return {
-        fov: 41,
-        position: new THREE.Vector3(0, 0.18, 19.2),
-        target: new THREE.Vector3(0, 0.1, -4.8),
-        orbitRadius: 26.4,
-      };
-    }
-
-    if (viewportMode === "mobile-portrait") {
-      return {
-        fov: 68,
-        position: new THREE.Vector3(0, 0.42, 26.4),
-        target: new THREE.Vector3(0, 0.1, -4.8),
-        orbitRadius: 26.4,
-      };
-    }
-
-    return {
-      fov: 36,
-      position: new THREE.Vector3(0, 0, 18),
-      target: new THREE.Vector3(0, 0.1, -4.8),
-      orbitRadius: 18,
-    };
-  }, [viewportMode]);
-
   useEffect(() => {
-    camera.fov = baseCameraConfig.fov;
-    camera.updateProjectionMatrix();
-  }, [camera, baseCameraConfig, size.width, size.height]);
+    let nextFov = 36;
+    let nextPosition = [0, 0, 18];
 
-  useFrame((_, delta) => {
-    const target = baseCameraConfig.target;
-
-    let desiredPosition = baseCameraConfig.position.clone();
-
-    if (viewportMode === "mobile-portrait") {
-      const yaw = portraitYaw;
-      const rel = new THREE.Vector3(0, 0.42, baseCameraConfig.orbitRadius);
-      rel.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-      desiredPosition = target.clone().add(rel);
+    if (viewportMode === "mobile-landscape") {
+      nextFov = 39;
+      nextPosition = [0, 0.08, 18.8];
     }
 
-    camera.position.lerp(desiredPosition, 1 - Math.exp(-6 * delta));
-    camera.lookAt(target);
-  });
+    if (viewportMode === "mobile-portrait") {
+      nextFov = 52;
+      nextPosition = [0, 0.2, 20.8];
+    }
+
+    camera.position.set(...nextPosition);
+    camera.fov = nextFov;
+    camera.lookAt(0, 0.12, -4.6);
+    camera.updateProjectionMatrix();
+  }, [camera, viewportMode, size.width, size.height]);
 
   return null;
 }
@@ -579,8 +535,8 @@ function BrickMaterial({
         Math.sin(t * 34) > 0.35
           ? 0.1
           : Math.sin(t * 18) > -0.1
-          ? 0.045
-          : 0.018;
+            ? 0.045
+            : 0.018;
     }
 
     if (powerState === "lamp") emissiveIntensity = 0.025;
@@ -608,11 +564,11 @@ function BrickMaterial({
 
 function BackWall({ powerState }) {
   const wallMaterialRef = useRef(null);
-  const textures = useWallBrickTextures(2.89, 1.42);
+  const textures = useWallBrickTextures(2.46, 1.42);
 
   return (
-    <mesh position={[0, 0.15, -12.8]} receiveShadow>
-      <planeGeometry args={[34, 18, 1, 1]} />
+    <mesh position={[0, 0.15, -11.05]} receiveShadow>
+      <planeGeometry args={[28.8, 18, 1, 1]} />
       <BrickMaterial
         powerState={powerState}
         textures={textures}
@@ -628,8 +584,8 @@ function SideWalls({ powerState }) {
   const leftRef = useRef(null);
   const rightRef = useRef(null);
 
-  const leftTextures = useWallBrickTextures(1.51, 1.42);
-  const rightTextures = useWallBrickTextures(1.51, 1.42);
+  const leftTextures = useWallBrickTextures(1.24, 1.42);
+  const rightTextures = useWallBrickTextures(1.24, 1.42);
 
   useFrame((state) => {
     const refs = [leftRef.current, rightRef.current].filter(Boolean);
@@ -645,8 +601,8 @@ function SideWalls({ powerState }) {
           Math.sin(t * 28) > 0.3
             ? 0.06
             : Math.sin(t * 16) > -0.05
-            ? 0.028
-            : 0.01;
+              ? 0.028
+              : 0.01;
       }
 
       if (powerState === "lamp") emissiveIntensity = 0.018;
@@ -658,11 +614,11 @@ function SideWalls({ powerState }) {
   return (
     <>
       <mesh
-        position={[-17, 0.15, -4.6]}
+        position={[-13.8, 0.15, -3.35]}
         rotation={[0, Math.PI / 2, 0]}
         receiveShadow
       >
-        <planeGeometry args={[18.6, 18, 1, 1]} />
+        <planeGeometry args={[15.4, 18, 1, 1]} />
         <meshStandardMaterial
           ref={leftRef}
           map={leftTextures.colorMap}
@@ -681,11 +637,11 @@ function SideWalls({ powerState }) {
       </mesh>
 
       <mesh
-        position={[17, 0.15, -4.6]}
+        position={[13.8, 0.15, -3.35]}
         rotation={[0, -Math.PI / 2, 0]}
         receiveShadow
       >
-        <planeGeometry args={[18.6, 18, 1, 1]} />
+        <planeGeometry args={[15.4, 18, 1, 1]} />
         <meshStandardMaterial
           ref={rightRef}
           map={rightTextures.colorMap}
@@ -707,15 +663,15 @@ function SideWalls({ powerState }) {
 }
 
 function Floor() {
-  const tile = useCheckerFloorTextures(6, 5);
+  const tile = useCheckerFloorTextures(5.2, 3.8);
 
   return (
     <mesh
-      position={[0, -6.1, -2.6]}
+      position={[0, -6.1, -1.35]}
       rotation={[-Math.PI / 2, 0, 0]}
       receiveShadow
     >
-      <planeGeometry args={[42, 34, 1, 1]} />
+      <planeGeometry args={[32, 24, 1, 1]} />
       <meshPhysicalMaterial
         map={tile.colorMap}
         normalMap={tile.normalMap}
@@ -740,8 +696,8 @@ function SoftBeamWall({ pointer, powerState }) {
   useFrame((_, delta) => {
     if (!beamRef.current) return;
 
-    const targetX = THREE.MathUtils.clamp(pointer.x * 13.5, -13.5, 13.5);
-    const targetY = THREE.MathUtils.clamp(pointer.y * 6.5, -6.5, 6.5);
+    const targetX = THREE.MathUtils.clamp(pointer.x * 11.4, -11.4, 11.4);
+    const targetY = THREE.MathUtils.clamp(pointer.y * 6.2, -6.2, 6.2);
 
     beamRef.current.position.x = THREE.MathUtils.damp(
       beamRef.current.position.x,
@@ -755,7 +711,7 @@ function SoftBeamWall({ pointer, powerState }) {
       5,
       delta
     );
-    beamRef.current.position.z = -12.66;
+    beamRef.current.position.z = -10.92;
 
     const targetOpacity = powerState === "lamp" ? 0.16 : 0;
     beamRef.current.material.opacity = THREE.MathUtils.damp(
@@ -767,8 +723,8 @@ function SoftBeamWall({ pointer, powerState }) {
   });
 
   return (
-    <mesh ref={beamRef} position={[0, 0, -12.66]} renderOrder={1}>
-      <planeGeometry args={[12.6, 12.6]} />
+    <mesh ref={beamRef} position={[0, 0, -10.92]} renderOrder={1}>
+      <planeGeometry args={[11.2, 11.2]} />
       <meshBasicMaterial
         map={beamTexture}
         transparent
@@ -789,8 +745,8 @@ function SoftBeamFloor({ pointer, powerState }) {
   useFrame((_, delta) => {
     if (!beamRef.current) return;
 
-    const targetX = THREE.MathUtils.clamp(pointer.x * 5.5, -5.5, 5.5);
-    const targetZ = THREE.MathUtils.clamp(pointer.y * 1.7, -3.1, 1.5);
+    const targetX = THREE.MathUtils.clamp(pointer.x * 4.9, -4.9, 4.9);
+    const targetZ = THREE.MathUtils.clamp(pointer.y * 1.65, -2.8, 1.4);
 
     beamRef.current.position.x = THREE.MathUtils.damp(
       beamRef.current.position.x,
@@ -800,7 +756,7 @@ function SoftBeamFloor({ pointer, powerState }) {
     );
     beamRef.current.position.z = THREE.MathUtils.damp(
       beamRef.current.position.z,
-      -1.9 + targetZ,
+      -1.55 + targetZ,
       5,
       delta
     );
@@ -817,11 +773,11 @@ function SoftBeamFloor({ pointer, powerState }) {
   return (
     <mesh
       ref={beamRef}
-      position={[0, -6.02, -1.8]}
+      position={[0, -6.02, -1.55]}
       rotation={[-Math.PI / 2, 0, 0]}
       renderOrder={1}
     >
-      <planeGeometry args={[12.2, 9.6]} />
+      <planeGeometry args={[11.4, 8.4]} />
       <meshBasicMaterial
         map={beamTexture}
         transparent
@@ -937,7 +893,7 @@ function NeonArrowSign({ visible }) {
     const box = new THREE.Box3().setFromObject(signScene);
     const size = box.getSize(new THREE.Vector3());
 
-    const targetWidth = 4.2;
+    const targetWidth = 4.0;
     const safeWidth = Math.max(size.x, 0.001);
 
     return targetWidth / safeWidth;
@@ -1079,7 +1035,7 @@ function NeonArrowSign({ visible }) {
     if (redRoomFillRef.current) {
       redRoomFillRef.current.intensity = THREE.MathUtils.damp(
         redRoomFillRef.current.intensity,
-        visible ? 2.6 * flicker : 0,
+        visible ? 2.35 * flicker : 0,
         8,
         delta
       );
@@ -1088,7 +1044,7 @@ function NeonArrowSign({ visible }) {
     if (redUpperBounceRef.current) {
       redUpperBounceRef.current.intensity = THREE.MathUtils.damp(
         redUpperBounceRef.current.intensity,
-        visible ? 2.15 * flicker : 0,
+        visible ? 2.0 * flicker : 0,
         8,
         delta
       );
@@ -1098,12 +1054,12 @@ function NeonArrowSign({ visible }) {
   return (
     <group
       ref={rootRef}
-      position={[11.9, 1.08, -11.62]}
+      position={[9.55, 1.08, -9.9]}
       rotation={[0, Math.PI + 0.22, 0]}
       scale={0.82}
     >
       <mesh ref={wallGlowOuterRef} position={[0, 0, -0.26]} renderOrder={1}>
-        <planeGeometry args={[7.6, 4.8]} />
+        <planeGeometry args={[7.2, 4.5]} />
         <meshBasicMaterial
           map={glowTexture}
           color="#ff4338"
@@ -1116,7 +1072,7 @@ function NeonArrowSign({ visible }) {
       </mesh>
 
       <mesh ref={wallGlowRef} position={[0, 0, -0.2]} renderOrder={2}>
-        <planeGeometry args={[5.8, 3.6]} />
+        <planeGeometry args={[5.5, 3.4]} />
         <meshBasicMaterial
           map={glowTexture}
           color="#ff5a4d"
@@ -1134,7 +1090,7 @@ function NeonArrowSign({ visible }) {
         rotation={[-Math.PI / 2, 0, 0]}
         renderOrder={2}
       >
-        <planeGeometry args={[4.8, 3.1]} />
+        <planeGeometry args={[4.5, 2.9]} />
         <meshBasicMaterial
           map={glowTexture}
           color="#ff4a3d"
@@ -1159,7 +1115,7 @@ function NeonArrowSign({ visible }) {
         position={[0, 0, -0.5]}
         color="#ff5144"
         intensity={0}
-        distance={20}
+        distance={18}
         decay={1.02}
       />
 
@@ -1168,7 +1124,7 @@ function NeonArrowSign({ visible }) {
         position={[0, -0.78, 0.42]}
         color="#ff4d42"
         intensity={0}
-        distance={18}
+        distance={15}
         decay={1.06}
       />
 
@@ -1177,25 +1133,25 @@ function NeonArrowSign({ visible }) {
         position={[0, 0.04, 0.52]}
         color="#ff7d70"
         intensity={0}
-        distance={13}
+        distance={11}
         decay={1.25}
       />
 
       <pointLight
         ref={redTextSpillRef}
-        position={[-1.35, 0.05, -0.1]}
+        position={[-1.15, 0.05, -0.1]}
         color="#ff6155"
         intensity={0}
-        distance={14}
+        distance={12}
         decay={1.1}
       />
 
       <pointLight
         ref={redRoomFillRef}
-        position={[1.1, 0.25, -1.4]}
+        position={[0.95, 0.25, -1.15]}
         color="#ff3e36"
         intensity={0}
-        distance={26}
+        distance={21}
         decay={0.95}
       />
 
@@ -1204,7 +1160,7 @@ function NeonArrowSign({ visible }) {
         position={[0.1, 1.1, -0.7]}
         color="#ff7062"
         intensity={0}
-        distance={16}
+        distance={13}
         decay={1.05}
       />
     </group>
@@ -1503,7 +1459,12 @@ function WallLamp() {
         <primitive object={lampScene} />
       </group>
 
-      <mesh ref={innerGlowARef} position={bulbPos} renderOrder={4}>
+      <mesh
+        ref={innerGlowARef}
+        position={bulbPos}
+        rotation={[0, 0, 0]}
+        renderOrder={4}
+      >
         <planeGeometry args={[0.24, 0.34]} />
         <meshBasicMaterial
           map={glowTexture}
@@ -1684,7 +1645,7 @@ function TextBlock({ powerState, introProgress }) {
   });
 
   return (
-    <group ref={rootRef} position={[0, 0.12, -1.05]} visible={layoutReady}>
+    <group ref={rootRef} position={[0, 0.12, -0.85]} visible={layoutReady}>
       <group position={[positions.dustinX, lineY1, 0]}>
         <Text3D
           ref={dustinRef}
@@ -1835,8 +1796,8 @@ function PowerLights({ powerState, pointer, showArrow }) {
           Math.sin(t * 28) > 0.32
             ? 0.13
             : Math.sin(t * 16) > -0.1
-            ? 0.05
-            : 0.015;
+              ? 0.05
+              : 0.015;
       }
 
       if (powerState === "lamp") ambient = 0.028;
@@ -1854,8 +1815,8 @@ function PowerLights({ powerState, pointer, showArrow }) {
           Math.sin(t * 22) > 0.28
             ? 0.62
             : Math.sin(t * 13) > -0.06
-            ? 0.22
-            : 0.04;
+              ? 0.22
+              : 0.04;
       }
 
       if (powerState === "lamp") fill = 0.055;
@@ -1864,11 +1825,11 @@ function PowerLights({ powerState, pointer, showArrow }) {
     }
 
     if (spotRef.current) {
-      const targetX = THREE.MathUtils.clamp(pointer.x * 13.5, -13.5, 13.5);
-      const targetY = THREE.MathUtils.clamp(pointer.y * 6.5, -6.5, 6.5);
+      const targetX = THREE.MathUtils.clamp(pointer.x * 11.4, -11.4, 11.4);
+      const targetY = THREE.MathUtils.clamp(pointer.y * 6.1, -6.1, 6.1);
 
-      const lampX = THREE.MathUtils.clamp(pointer.x * 1.8, -1.8, 1.8);
-      const lampY = THREE.MathUtils.clamp(pointer.y * 1.2, -1.2, 1.2) + 0.35;
+      const lampX = THREE.MathUtils.clamp(pointer.x * 1.55, -1.55, 1.55);
+      const lampY = THREE.MathUtils.clamp(pointer.y * 1.15, -1.15, 1.15) + 0.3;
 
       spotTarget.position.x = THREE.MathUtils.damp(
         spotTarget.position.x,
@@ -1882,7 +1843,7 @@ function PowerLights({ powerState, pointer, showArrow }) {
         10,
         delta
       );
-      spotTarget.position.z = -12.75;
+      spotTarget.position.z = -11.0;
       spotTarget.updateMatrixWorld(true);
 
       spotRef.current.position.x = THREE.MathUtils.damp(
@@ -1897,17 +1858,17 @@ function PowerLights({ powerState, pointer, showArrow }) {
         10,
         delta
       );
-      spotRef.current.position.z = 11.8;
+      spotRef.current.position.z = 11.1;
 
       spotRef.current.target = spotTarget;
-      spotRef.current.intensity = powerState === "lamp" ? 980 : 0;
-      spotRef.current.angle = 0.28;
+      spotRef.current.intensity = powerState === "lamp" ? 950 : 0;
+      spotRef.current.angle = 0.29;
       spotRef.current.penumbra = 1;
-      spotRef.current.distance = 98;
+      spotRef.current.distance = 78;
       spotRef.current.decay = 1;
 
       spotRef.current.shadow.camera.near = 6;
-      spotRef.current.shadow.camera.far = 42;
+      spotRef.current.shadow.camera.far = 36;
       spotRef.current.shadow.focus = 1;
       spotRef.current.shadow.bias = -0.00012;
       spotRef.current.shadow.normalBias = 0.02;
@@ -1918,11 +1879,11 @@ function PowerLights({ powerState, pointer, showArrow }) {
       gl.shadowMap.needsUpdate = true;
     }
 
-    edgeTarget.position.set(-1.8, -0.35, -1.2);
+    edgeTarget.position.set(-1.55, -0.32, -1.0);
     edgeTarget.updateMatrixWorld(true);
 
     if (neonBounceRef.current) {
-      const target = showArrow ? 2.1 : 0;
+      const target = showArrow ? 2.0 : 0;
       neonBounceRef.current.intensity = THREE.MathUtils.damp(
         neonBounceRef.current.intensity,
         target,
@@ -1932,7 +1893,7 @@ function PowerLights({ powerState, pointer, showArrow }) {
     }
 
     if (neonEdgeRef.current) {
-      const target = showArrow ? 180 : 0;
+      const target = showArrow ? 175 : 0;
       neonEdgeRef.current.intensity = THREE.MathUtils.damp(
         neonEdgeRef.current.intensity,
         target,
@@ -1948,40 +1909,40 @@ function PowerLights({ powerState, pointer, showArrow }) {
 
       <pointLight
         ref={wallWashRef}
-        position={[0, 1.2, -7.9]}
+        position={[0, 1.2, -6.9]}
         color="#4f2523"
         intensity={0.7}
-        distance={34}
+        distance={27}
         decay={1.8}
       />
 
       <pointLight
         ref={neonBounceRef}
-        position={[11.45, 0.48, -10.85]}
+        position={[9.05, 0.48, -9.25]}
         color="#ff3b3b"
         intensity={0}
-        distance={18}
+        distance={14}
         decay={1.05}
       />
 
       <spotLight
         ref={neonEdgeRef}
-        position={[9.8, 0.95, -10.6]}
+        position={[8.15, 0.95, -9.15]}
         color="#ff4545"
         intensity={0}
         angle={0.18}
         penumbra={1}
-        distance={24}
+        distance={19}
         decay={1.2}
       />
 
       <spotLight
         ref={spotRef}
-        position={[0, 0.35, 11.8]}
+        position={[0, 0.35, 11.1]}
         color="#fff6e8"
         castShadow
-        shadow-mapSize-width={4096}
-        shadow-mapSize-height={4096}
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
         shadow-bias={-0.00012}
         shadow-normalBias={0.02}
       />
@@ -1989,18 +1950,11 @@ function PowerLights({ powerState, pointer, showArrow }) {
   );
 }
 
-function Scene({
-  powerState,
-  pointer,
-  introProgress,
-  showArrow,
-  viewportMode,
-  portraitYaw,
-}) {
+function Scene({ powerState, pointer, introProgress, showArrow, viewportMode }) {
   return (
     <>
-      <ResponsiveCamera viewportMode={viewportMode} portraitYaw={portraitYaw} />
-      <fog attach="fog" args={["#02050b", 11, 44]} />
+      <ResponsiveCamera viewportMode={viewportMode} />
+      <fog attach="fog" args={["#02050b", 10, 34]} />
       <BackWall powerState={powerState} />
       <SideWalls powerState={powerState} />
       <Floor />
@@ -2020,25 +1974,11 @@ function Scene({
 
 export default function HeroSection() {
   const sectionRef = useRef(null);
-
   const [powerState, setPowerState] = useState("intro");
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const [introProgress, setIntroProgress] = useState(0);
   const [showArrow, setShowArrow] = useState(false);
   const [viewportMode, setViewportMode] = useState(getViewportMode);
-  const [portraitYaw, setPortraitYaw] = useState(0);
-
-  const touchGateRef = useRef({
-    startX: 0,
-    startY: 0,
-    lastX: 0,
-    lastY: 0,
-    axis: null,
-    verticalSwipeAccepted: false,
-    blockedThisGesture: false,
-    remainingVerticalBlocks: 3,
-    startYaw: 0,
-  });
 
   useEffect(() => {
     const updateViewportMode = () => {
@@ -2054,12 +1994,6 @@ export default function HeroSection() {
       window.removeEventListener("orientationchange", updateViewportMode);
     };
   }, []);
-
-  useEffect(() => {
-    if (viewportMode !== "mobile-portrait") {
-      setPortraitYaw(0);
-    }
-  }, [viewportMode]);
 
   useEffect(() => {
     let rafId = 0;
@@ -2112,126 +2046,46 @@ export default function HeroSection() {
   }, []);
 
   useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+
     const handlePointerMove = (e) => {
       updatePointerFromClient(e.clientX, e.clientY);
     };
 
-    const el = sectionRef.current;
-    if (!el) return;
-
-    el.addEventListener("pointermove", handlePointerMove);
-
-    return () => {
-      el.removeEventListener("pointermove", handlePointerMove);
-    };
-  }, [updatePointerFromClient]);
-
-  useEffect(() => {
-    const el = sectionRef.current;
-    if (!el) return;
-
-    const isMobile = viewportMode !== "desktop";
-    if (!isMobile) return;
-
     const handleTouchStart = (e) => {
       const touch = e.touches?.[0];
       if (!touch) return;
-
       updatePointerFromClient(touch.clientX, touch.clientY);
-
-      const gate = touchGateRef.current;
-      gate.startX = touch.clientX;
-      gate.startY = touch.clientY;
-      gate.lastX = touch.clientX;
-      gate.lastY = touch.clientY;
-      gate.axis = null;
-      gate.verticalSwipeAccepted = false;
-      gate.blockedThisGesture = false;
-      gate.startYaw = portraitYaw;
     };
 
     const handleTouchMove = (e) => {
       const touch = e.touches?.[0];
       if (!touch) return;
-
       updatePointerFromClient(touch.clientX, touch.clientY);
-
-      const gate = touchGateRef.current;
-      const dx = touch.clientX - gate.startX;
-      const dy = touch.clientY - gate.startY;
-      const absX = Math.abs(dx);
-      const absY = Math.abs(dy);
-
-      if (!gate.axis && (absX > 10 || absY > 10)) {
-        gate.axis = absX > absY ? "x" : "y";
-      }
-
-      if (viewportMode === "mobile-portrait" && gate.axis === "x") {
-        const yaw = gate.startYaw + dx * 0.0036;
-        setPortraitYaw(THREE.MathUtils.clamp(yaw, -0.55, 0.55));
-        gate.lastX = touch.clientX;
-        gate.lastY = touch.clientY;
-        return;
-      }
-
-      if (gate.axis === "x") {
-        gate.lastX = touch.clientX;
-        gate.lastY = touch.clientY;
-        return;
-      }
-
-      if (gate.axis === "y") {
-        if (!gate.verticalSwipeAccepted && absY > 26) {
-          gate.verticalSwipeAccepted = true;
-
-          if (gate.remainingVerticalBlocks > 1) {
-            gate.remainingVerticalBlocks -= 1;
-            gate.blockedThisGesture = true;
-          } else {
-            gate.remainingVerticalBlocks = 3;
-            gate.blockedThisGesture = false;
-          }
-        }
-
-        if (gate.blockedThisGesture) {
-          e.preventDefault();
-        }
-      }
-
-      gate.lastX = touch.clientX;
-      gate.lastY = touch.clientY;
     };
 
-    const handleTouchEnd = () => {
-      const gate = touchGateRef.current;
-      gate.axis = null;
-      gate.verticalSwipeAccepted = false;
-      gate.blockedThisGesture = false;
-    };
-
+    el.addEventListener("pointermove", handlePointerMove);
     el.addEventListener("touchstart", handleTouchStart, { passive: true });
-    el.addEventListener("touchmove", handleTouchMove, { passive: false });
-    el.addEventListener("touchend", handleTouchEnd, { passive: true });
-    el.addEventListener("touchcancel", handleTouchEnd, { passive: true });
+    el.addEventListener("touchmove", handleTouchMove, { passive: true });
 
     return () => {
+      el.removeEventListener("pointermove", handlePointerMove);
       el.removeEventListener("touchstart", handleTouchStart);
       el.removeEventListener("touchmove", handleTouchMove);
-      el.removeEventListener("touchend", handleTouchEnd);
-      el.removeEventListener("touchcancel", handleTouchEnd);
     };
-  }, [viewportMode, updatePointerFromClient, portraitYaw]);
+  }, [updatePointerFromClient]);
 
   const canvasDpr =
     viewportMode === "desktop"
       ? [1, 1.8]
       : viewportMode === "mobile-landscape"
-      ? [1, 1.5]
-      : [1, 1.35];
+        ? [1, 1.5]
+        : [1, 1.35];
 
   return (
     <section
-      className={`hero hero-3d hero-power-${powerState} hero-${viewportMode}`}
+      className={`hero hero-3d hero-power-${powerState}`}
       id="hero"
       ref={sectionRef}
     >
@@ -2254,7 +2108,6 @@ export default function HeroSection() {
                 introProgress={introProgress}
                 showArrow={showArrow}
                 viewportMode={viewportMode}
-                portraitYaw={portraitYaw}
               />
             </Suspense>
           </Canvas>
