@@ -218,12 +218,13 @@
 
     .hero-overlay-ui {
         justify-content: flex-start;
-        padding-top: 18px;
+        padding-top: max(18px, env(safe-area-inset-top));
     }
 
     .hero-badge-row {
         max-width: 100%;
         gap: 8px;
+        padding-top: 4px;
     }
 
     .hero-badge {

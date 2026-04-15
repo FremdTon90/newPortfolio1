@@ -165,28 +165,6 @@ function addSpeckleNoise(
   }
 }
 
-function drawFineScratches(ctx, areaX, areaY, areaW, areaH, count, alpha = 0.05) {
-  ctx.save();
-  for (let i = 0; i < count; i += 1) {
-    const x = areaX + Math.random() * areaW;
-    const y = areaY + Math.random() * areaH;
-    const len = 6 + Math.random() * 18;
-    const angle = (-0.6 + Math.random() * 1.2) * 0.35;
-    const dx = Math.cos(angle) * len;
-    const dy = Math.sin(angle) * len;
-
-    ctx.strokeStyle = `rgba(255,255,255,${
-      alpha * (0.65 + Math.random() * 0.7)
-    })`;
-    ctx.lineWidth = 0.4 + Math.random() * 0.5;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + dx, y + dy);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
 function createNormalMapFromHeightCanvas(heightCanvas, strength = 2.2) {
   const srcCtx = heightCanvas.getContext("2d");
   const { width, height } = heightCanvas;
@@ -358,38 +336,9 @@ function createBrickTextures() {
       htx.fillStyle = "#afafaf";
       htx.fillRect(px, py + brickH - 3, brickW, 3);
 
-      for (let i = 0; i < 4; i += 1) {
-        drawSoftBlob(
-          htx,
-          px + 12 + Math.random() * (brickW - 24),
-          py + 10 + Math.random() * (brickH - 20),
-          6 + Math.random() * 12,
-          4 + Math.random() * 8,
-          [
-            [0, `rgba(220,220,220,${0.10 + Math.random() * 0.08})`],
-            [1, "rgba(220,220,220,0)"],
-          ]
-        );
-      }
-
       const roughBase = 160 + Math.floor(Math.random() * 18);
       rtx.fillStyle = `rgb(${roughBase},${roughBase},${roughBase})`;
       rtx.fillRect(px, py, brickW, brickH);
-
-      for (let i = 0; i < 4; i += 1) {
-        const value = 138 + Math.floor(Math.random() * 24);
-        drawSoftBlob(
-          rtx,
-          px + 12 + Math.random() * (brickW - 24),
-          py + 10 + Math.random() * (brickH - 20),
-          8 + Math.random() * 20,
-          5 + Math.random() * 10,
-          [
-            [0, `rgba(${value},${value},${value},0.32)`],
-            [1, `rgba(${value},${value},${value},0)`],
-          ]
-        );
-      }
     }
   }
 
@@ -565,12 +514,17 @@ function ResponsiveCamera({ viewportMode }) {
     }
 
     if (viewportMode === "mobile-portrait") {
-      nextFov = 54;
-      nextPosition = [0, 0.35, 22.5];
+      // Symmetrisch bleiben: keine X-Verschiebung.
+      // Stattdessen deutlich mehr Weitwinkel + weiter zurück,
+      // damit beide Seitenwände gleich weit sichtbar sind
+      // und die Wandlampe sicher im Bild bleibt.
+      nextFov = 68;
+      nextPosition = [0, 0.42, 26.4];
     }
 
     camera.position.set(...nextPosition);
     camera.fov = nextFov;
+    camera.lookAt(0, 0.1, -4.8);
     camera.updateProjectionMatrix();
   }, [camera, viewportMode, size.width, size.height]);
 
