@@ -501,32 +501,56 @@ function useCheckerFloorTextures(repeatX = 6, repeatY = 5) {
    Camera
 ----------------------------- */
 
-function ResponsiveCamera({ viewportMode }) {
+function ResponsiveCamera({ viewportMode, portraitYaw }) {
   const { camera, size } = useThree();
 
-  useEffect(() => {
-    let nextFov = 36;
-    let nextPosition = [0, 0, 18];
-
+  const baseCameraConfig = useMemo(() => {
     if (viewportMode === "mobile-landscape") {
-      nextFov = 41;
-      nextPosition = [0, 0.18, 19.2];
+      return {
+        fov: 41,
+        position: new THREE.Vector3(0, 0.18, 19.2),
+        target: new THREE.Vector3(0, 0.1, -4.8),
+        orbitRadius: 26.4,
+      };
     }
 
     if (viewportMode === "mobile-portrait") {
-      // Symmetrisch bleiben: keine X-Verschiebung.
-      // Stattdessen deutlich mehr Weitwinkel + weiter zurück,
-      // damit beide Seitenwände gleich weit sichtbar sind
-      // und die Wandlampe sicher im Bild bleibt.
-      nextFov = 68;
-      nextPosition = [0, 0.42, 26.4];
+      return {
+        fov: 68,
+        position: new THREE.Vector3(0, 0.42, 26.4),
+        target: new THREE.Vector3(0, 0.1, -4.8),
+        orbitRadius: 26.4,
+      };
     }
 
-    camera.position.set(...nextPosition);
-    camera.fov = nextFov;
-    camera.lookAt(0, 0.1, -4.8);
+    return {
+      fov: 36,
+      position: new THREE.Vector3(0, 0, 18),
+      target: new THREE.Vector3(0, 0.1, -4.8),
+      orbitRadius: 18,
+    };
+  }, [viewportMode]);
+
+  useEffect(() => {
+    camera.fov = baseCameraConfig.fov;
     camera.updateProjectionMatrix();
-  }, [camera, viewportMode, size.width, size.height]);
+  }, [camera, baseCameraConfig, size.width, size.height]);
+
+  useFrame((_, delta) => {
+    const target = baseCameraConfig.target;
+
+    let desiredPosition = baseCameraConfig.position.clone();
+
+    if (viewportMode === "mobile-portrait") {
+      const yaw = portraitYaw;
+      const rel = new THREE.Vector3(0, 0.42, baseCameraConfig.orbitRadius);
+      rel.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+      desiredPosition = target.clone().add(rel);
+    }
+
+    camera.position.lerp(desiredPosition, 1 - Math.exp(-6 * delta));
+    camera.lookAt(target);
+  });
 
   return null;
 }
@@ -1965,10 +1989,17 @@ function PowerLights({ powerState, pointer, showArrow }) {
   );
 }
 
-function Scene({ powerState, pointer, introProgress, showArrow, viewportMode }) {
+function Scene({
+  powerState,
+  pointer,
+  introProgress,
+  showArrow,
+  viewportMode,
+  portraitYaw,
+}) {
   return (
     <>
-      <ResponsiveCamera viewportMode={viewportMode} />
+      <ResponsiveCamera viewportMode={viewportMode} portraitYaw={portraitYaw} />
       <fog attach="fog" args={["#02050b", 11, 44]} />
       <BackWall powerState={powerState} />
       <SideWalls powerState={powerState} />
@@ -1995,14 +2026,18 @@ export default function HeroSection() {
   const [introProgress, setIntroProgress] = useState(0);
   const [showArrow, setShowArrow] = useState(false);
   const [viewportMode, setViewportMode] = useState(getViewportMode);
+  const [portraitYaw, setPortraitYaw] = useState(0);
 
   const touchGateRef = useRef({
     startX: 0,
     startY: 0,
+    lastX: 0,
+    lastY: 0,
     axis: null,
-    swipeConsumed: false,
-    swipeCount: 0,
-    allowScroll: false,
+    verticalSwipeAccepted: false,
+    blockedThisGesture: false,
+    remainingVerticalBlocks: 3,
+    startYaw: 0,
   });
 
   useEffect(() => {
@@ -2019,6 +2054,12 @@ export default function HeroSection() {
       window.removeEventListener("orientationchange", updateViewportMode);
     };
   }, []);
+
+  useEffect(() => {
+    if (viewportMode !== "mobile-portrait") {
+      setPortraitYaw(0);
+    }
+  }, [viewportMode]);
 
   useEffect(() => {
     let rafId = 0;
@@ -2098,11 +2139,15 @@ export default function HeroSection() {
 
       updatePointerFromClient(touch.clientX, touch.clientY);
 
-      touchGateRef.current.startX = touch.clientX;
-      touchGateRef.current.startY = touch.clientY;
-      touchGateRef.current.axis = null;
-      touchGateRef.current.swipeConsumed = false;
-      touchGateRef.current.allowScroll = false;
+      const gate = touchGateRef.current;
+      gate.startX = touch.clientX;
+      gate.startY = touch.clientY;
+      gate.lastX = touch.clientX;
+      gate.lastY = touch.clientY;
+      gate.axis = null;
+      gate.verticalSwipeAccepted = false;
+      gate.blockedThisGesture = false;
+      gate.startYaw = portraitYaw;
     };
 
     const handleTouchMove = (e) => {
@@ -2117,37 +2162,51 @@ export default function HeroSection() {
       const absX = Math.abs(dx);
       const absY = Math.abs(dy);
 
-      if (!gate.axis && (absX > 8 || absY > 8)) {
+      if (!gate.axis && (absX > 10 || absY > 10)) {
         gate.axis = absX > absY ? "x" : "y";
       }
 
+      if (viewportMode === "mobile-portrait" && gate.axis === "x") {
+        const yaw = gate.startYaw + dx * 0.0036;
+        setPortraitYaw(THREE.MathUtils.clamp(yaw, -0.55, 0.55));
+        gate.lastX = touch.clientX;
+        gate.lastY = touch.clientY;
+        return;
+      }
+
       if (gate.axis === "x") {
+        gate.lastX = touch.clientX;
+        gate.lastY = touch.clientY;
         return;
       }
 
       if (gate.axis === "y") {
-        if (!gate.swipeConsumed && absY > 28) {
-          if (gate.swipeCount < 2) {
-            gate.swipeCount += 1;
-            gate.swipeConsumed = true;
+        if (!gate.verticalSwipeAccepted && absY > 26) {
+          gate.verticalSwipeAccepted = true;
+
+          if (gate.remainingVerticalBlocks > 1) {
+            gate.remainingVerticalBlocks -= 1;
+            gate.blockedThisGesture = true;
           } else {
-            gate.allowScroll = true;
-            gate.swipeConsumed = true;
-            gate.swipeCount = 0;
+            gate.remainingVerticalBlocks = 3;
+            gate.blockedThisGesture = false;
           }
         }
 
-        if (!gate.allowScroll) {
+        if (gate.blockedThisGesture) {
           e.preventDefault();
         }
       }
+
+      gate.lastX = touch.clientX;
+      gate.lastY = touch.clientY;
     };
 
     const handleTouchEnd = () => {
       const gate = touchGateRef.current;
       gate.axis = null;
-      gate.swipeConsumed = false;
-      gate.allowScroll = false;
+      gate.verticalSwipeAccepted = false;
+      gate.blockedThisGesture = false;
     };
 
     el.addEventListener("touchstart", handleTouchStart, { passive: true });
@@ -2161,7 +2220,7 @@ export default function HeroSection() {
       el.removeEventListener("touchend", handleTouchEnd);
       el.removeEventListener("touchcancel", handleTouchEnd);
     };
-  }, [viewportMode, updatePointerFromClient]);
+  }, [viewportMode, updatePointerFromClient, portraitYaw]);
 
   const canvasDpr =
     viewportMode === "desktop"
@@ -2195,6 +2254,7 @@ export default function HeroSection() {
                 introProgress={introProgress}
                 showArrow={showArrow}
                 viewportMode={viewportMode}
+                portraitYaw={portraitYaw}
               />
             </Suspense>
           </Canvas>

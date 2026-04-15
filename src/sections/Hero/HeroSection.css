@@ -9,6 +9,7 @@
         linear-gradient(180deg, #01040a 0%, #040816 56%, #07101c 100%);
     isolation: isolate;
     overscroll-behavior: contain;
+    touch-action: pan-x pan-y;
 }
 
 .hero-canvas-wrap {
