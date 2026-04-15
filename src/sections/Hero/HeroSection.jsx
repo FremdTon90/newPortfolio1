@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
   useLayoutEffect,
+  useCallback,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text3D, useGLTF, useTexture } from "@react-three/drei";
@@ -21,7 +22,8 @@ const CHECKER_FLOOR_NORMAL_URL = checkerFloorNormal;
 const CHECKER_FLOOR_ROUGHNESS_URL = checkerFloorRoughness;
 const FONT_URL = `${import.meta.env.BASE_URL}fonts/helvetiker_bold.typeface.json`;
 const SIGN_URL = `${import.meta.env.BASE_URL}models/neon_open_sign.glb`;
-const LAMP_WALL_URL = `${import.meta.env.BASE_URL}models/lampWall.glb`
+const LAMP_WALL_URL = `${import.meta.env.BASE_URL}models/lampWall.glb`;
+
 const WALL_LAMP_CONFIG = {
   lampPosition: [-16.96, 1.78, -8.45],
   lampRotation: [0, Math.PI / 2, 0],
@@ -51,6 +53,16 @@ const WALL_LAMP_CONFIG = {
   helperSize: 0.02,
 };
 
+function getViewportMode() {
+  if (typeof window === "undefined") return "desktop";
+
+  const isMobile = window.matchMedia("(max-width: 768px)").matches;
+  const isPortrait = window.matchMedia("(orientation: portrait)").matches;
+
+  if (!isMobile) return "desktop";
+  return isPortrait ? "mobile-portrait" : "mobile-landscape";
+}
+
 class HeroCanvasErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -72,7 +84,9 @@ class HeroCanvasErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <div className="hero-fallback">
-          <div className="hero-fallback-title">3D Hero konnte nicht geladen werden</div>
+          <div className="hero-fallback-title">
+            3D Hero konnte nicht geladen werden
+          </div>
           <div className="hero-fallback-text">
             Prüfe die Font-Datei unter <code>{FONT_URL}</code>.
           </div>
@@ -128,7 +142,15 @@ function drawSoftBlob(ctx, x, y, rx, ry, colorStops) {
   ctx.restore();
 }
 
-function addSpeckleNoise(ctx, width, height, count, alphaMin, alphaMax, dark = false) {
+function addSpeckleNoise(
+  ctx,
+  width,
+  height,
+  count,
+  alphaMin,
+  alphaMax,
+  dark = false
+) {
   for (let i = 0; i < count; i += 1) {
     const x = Math.random() * width;
     const y = Math.random() * height;
@@ -153,7 +175,9 @@ function drawFineScratches(ctx, areaX, areaY, areaW, areaH, count, alpha = 0.05)
     const dx = Math.cos(angle) * len;
     const dy = Math.sin(angle) * len;
 
-    ctx.strokeStyle = `rgba(255,255,255,${alpha * (0.65 + Math.random() * 0.7)})`;
+    ctx.strokeStyle = `rgba(255,255,255,${
+      alpha * (0.65 + Math.random() * 0.7)
+    })`;
     ctx.lineWidth = 0.4 + Math.random() * 0.5;
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -260,8 +284,14 @@ function createBrickTextures() {
 
       const grad = ctx.createLinearGradient(px, py, px, py + brickH);
       grad.addColorStop(0, `hsl(${hue} ${sat}% ${light + 3}%)`);
-      grad.addColorStop(0.5, `hsl(${hue + (Math.random() * 1.5 - 0.75)} ${sat}% ${light}%)`);
-      grad.addColorStop(1, `hsl(${hue + 1} ${Math.max(12, sat - 2)}% ${Math.max(8, light - 4)}%)`);
+      grad.addColorStop(
+        0.5,
+        `hsl(${hue + (Math.random() * 1.5 - 0.75)} ${sat}% ${light}%)`
+      );
+      grad.addColorStop(
+        1,
+        `hsl(${hue + 1} ${Math.max(12, sat - 2)}% ${Math.max(8, light - 4)}%)`
+      );
       ctx.fillStyle = grad;
       ctx.fillRect(px, py, brickW, brickH);
 
@@ -373,7 +403,6 @@ function createBrickTextures() {
 
   addSpeckleNoise(ctx, width, height, 2200, 0.004, 0.014, false);
   addSpeckleNoise(ctx, width, height, 1800, 0.004, 0.012, true);
-
   addSpeckleNoise(rtx, width, height, 1600, 0.012, 0.032, true);
 
   const colorMap = createColorTextureFromCanvas(colorCanvas);
@@ -513,10 +542,39 @@ function useCheckerFloorTextures(repeatX = 6, repeatY = 5) {
 
     return {
       colorMap: setupTexture(colorMap, true),
-      normalMap: setupTexture(normalMap, false),
-      roughnessMap: setupTexture(roughnessMap, false),
+      normalMap: setupTexture(normalMap),
+      roughnessMap: setupTexture(roughnessMap),
     };
   }, [colorMap, normalMap, roughnessMap, repeatX, repeatY]);
+}
+
+/* -----------------------------
+   Camera
+----------------------------- */
+
+function ResponsiveCamera({ viewportMode }) {
+  const { camera, size } = useThree();
+
+  useEffect(() => {
+    let nextFov = 36;
+    let nextPosition = [0, 0, 18];
+
+    if (viewportMode === "mobile-landscape") {
+      nextFov = 41;
+      nextPosition = [0, 0.18, 19.2];
+    }
+
+    if (viewportMode === "mobile-portrait") {
+      nextFov = 54;
+      nextPosition = [0, 0.35, 22.5];
+    }
+
+    camera.position.set(...nextPosition);
+    camera.fov = nextFov;
+    camera.updateProjectionMatrix();
+  }, [camera, viewportMode, size.width, size.height]);
+
+  return null;
 }
 
 /* -----------------------------
@@ -543,8 +601,8 @@ function BrickMaterial({
         Math.sin(t * 34) > 0.35
           ? 0.1
           : Math.sin(t * 18) > -0.1
-            ? 0.045
-            : 0.018;
+          ? 0.045
+          : 0.018;
     }
 
     if (powerState === "lamp") emissiveIntensity = 0.025;
@@ -609,8 +667,8 @@ function SideWalls({ powerState }) {
           Math.sin(t * 28) > 0.3
             ? 0.06
             : Math.sin(t * 16) > -0.05
-              ? 0.028
-              : 0.01;
+            ? 0.028
+            : 0.01;
       }
 
       if (powerState === "lamp") emissiveIntensity = 0.018;
@@ -1467,12 +1525,7 @@ function WallLamp() {
         <primitive object={lampScene} />
       </group>
 
-      <mesh
-        ref={innerGlowARef}
-        position={bulbPos}
-        rotation={[0, 0, 0]}
-        renderOrder={4}
-      >
+      <mesh ref={innerGlowARef} position={bulbPos} renderOrder={4}>
         <planeGeometry args={[0.24, 0.34]} />
         <meshBasicMaterial
           map={glowTexture}
@@ -1804,8 +1857,8 @@ function PowerLights({ powerState, pointer, showArrow }) {
           Math.sin(t * 28) > 0.32
             ? 0.13
             : Math.sin(t * 16) > -0.1
-              ? 0.05
-              : 0.015;
+            ? 0.05
+            : 0.015;
       }
 
       if (powerState === "lamp") ambient = 0.028;
@@ -1823,8 +1876,8 @@ function PowerLights({ powerState, pointer, showArrow }) {
           Math.sin(t * 22) > 0.28
             ? 0.62
             : Math.sin(t * 13) > -0.06
-              ? 0.22
-              : 0.04;
+            ? 0.22
+            : 0.04;
       }
 
       if (powerState === "lamp") fill = 0.055;
@@ -1958,9 +2011,10 @@ function PowerLights({ powerState, pointer, showArrow }) {
   );
 }
 
-function Scene({ powerState, pointer, introProgress, showArrow }) {
+function Scene({ powerState, pointer, introProgress, showArrow, viewportMode }) {
   return (
     <>
+      <ResponsiveCamera viewportMode={viewportMode} />
       <fog attach="fog" args={["#02050b", 11, 44]} />
       <BackWall powerState={powerState} />
       <SideWalls powerState={powerState} />
@@ -1981,10 +2035,36 @@ function Scene({ powerState, pointer, introProgress, showArrow }) {
 
 export default function HeroSection() {
   const sectionRef = useRef(null);
+
   const [powerState, setPowerState] = useState("intro");
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const [introProgress, setIntroProgress] = useState(0);
   const [showArrow, setShowArrow] = useState(false);
+  const [viewportMode, setViewportMode] = useState(getViewportMode);
+
+  const touchGateRef = useRef({
+    startX: 0,
+    startY: 0,
+    axis: null,
+    swipeConsumed: false,
+    swipeCount: 0,
+    allowScroll: false,
+  });
+
+  useEffect(() => {
+    const updateViewportMode = () => {
+      setViewportMode(getViewportMode());
+    };
+
+    updateViewportMode();
+    window.addEventListener("resize", updateViewportMode);
+    window.addEventListener("orientationchange", updateViewportMode);
+
+    return () => {
+      window.removeEventListener("resize", updateViewportMode);
+      window.removeEventListener("orientationchange", updateViewportMode);
+    };
+  }, []);
 
   useEffect(() => {
     let rafId = 0;
@@ -2022,40 +2102,123 @@ export default function HeroSection() {
     };
   }, []);
 
+  const updatePointerFromClient = useCallback((clientX, clientY) => {
+    const el = sectionRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -(((clientY - rect.top) / rect.height) * 2 - 1);
+
+    setPointer({
+      x: THREE.MathUtils.clamp(x, -1, 1),
+      y: THREE.MathUtils.clamp(y, -1, 1),
+    });
+  }, []);
+
   useEffect(() => {
     const handlePointerMove = (e) => {
-      const el = sectionRef.current;
-      if (!el) return;
-
-      const rect = el.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-
-      setPointer({
-        x: THREE.MathUtils.clamp(x, -1, 1),
-        y: THREE.MathUtils.clamp(y, -1, 1),
-      });
-    };
-
-    const handlePointerLeave = () => {
-      // letzte Position behalten
+      updatePointerFromClient(e.clientX, e.clientY);
     };
 
     const el = sectionRef.current;
     if (!el) return;
 
     el.addEventListener("pointermove", handlePointerMove);
-    el.addEventListener("pointerleave", handlePointerLeave);
 
     return () => {
       el.removeEventListener("pointermove", handlePointerMove);
-      el.removeEventListener("pointerleave", handlePointerLeave);
     };
-  }, []);
+  }, [updatePointerFromClient]);
+
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+
+    const isMobile = viewportMode !== "desktop";
+    if (!isMobile) return;
+
+    const handleTouchStart = (e) => {
+      const touch = e.touches?.[0];
+      if (!touch) return;
+
+      updatePointerFromClient(touch.clientX, touch.clientY);
+
+      touchGateRef.current.startX = touch.clientX;
+      touchGateRef.current.startY = touch.clientY;
+      touchGateRef.current.axis = null;
+      touchGateRef.current.swipeConsumed = false;
+      touchGateRef.current.allowScroll = false;
+    };
+
+    const handleTouchMove = (e) => {
+      const touch = e.touches?.[0];
+      if (!touch) return;
+
+      updatePointerFromClient(touch.clientX, touch.clientY);
+
+      const gate = touchGateRef.current;
+      const dx = touch.clientX - gate.startX;
+      const dy = touch.clientY - gate.startY;
+      const absX = Math.abs(dx);
+      const absY = Math.abs(dy);
+
+      if (!gate.axis && (absX > 8 || absY > 8)) {
+        gate.axis = absX > absY ? "x" : "y";
+      }
+
+      if (gate.axis === "x") {
+        return;
+      }
+
+      if (gate.axis === "y") {
+        if (!gate.swipeConsumed && absY > 28) {
+          if (gate.swipeCount < 2) {
+            gate.swipeCount += 1;
+            gate.swipeConsumed = true;
+          } else {
+            gate.allowScroll = true;
+            gate.swipeConsumed = true;
+            gate.swipeCount = 0;
+          }
+        }
+
+        if (!gate.allowScroll) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      const gate = touchGateRef.current;
+      gate.axis = null;
+      gate.swipeConsumed = false;
+      gate.allowScroll = false;
+    };
+
+    el.addEventListener("touchstart", handleTouchStart, { passive: true });
+    el.addEventListener("touchmove", handleTouchMove, { passive: false });
+    el.addEventListener("touchend", handleTouchEnd, { passive: true });
+    el.addEventListener("touchcancel", handleTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchmove", handleTouchMove);
+      el.removeEventListener("touchend", handleTouchEnd);
+      el.removeEventListener("touchcancel", handleTouchEnd);
+    };
+  }, [viewportMode, updatePointerFromClient]);
+
+  const canvasDpr =
+    viewportMode === "desktop"
+      ? [1, 1.8]
+      : viewportMode === "mobile-landscape"
+      ? [1, 1.5]
+      : [1, 1.35];
 
   return (
     <section
-      className={`hero hero-3d hero-power-${powerState}`}
+      className={`hero hero-3d hero-power-${powerState} hero-${viewportMode}`}
       id="hero"
       ref={sectionRef}
     >
@@ -2064,7 +2227,7 @@ export default function HeroSection() {
           <Canvas
             shadows
             camera={{ position: [0, 0, 18], fov: 36 }}
-            dpr={[1, 1.8]}
+            dpr={canvasDpr}
             gl={{
               antialias: true,
               physicallyCorrectLights: true,
@@ -2077,6 +2240,7 @@ export default function HeroSection() {
                 pointer={pointer}
                 introProgress={introProgress}
                 showArrow={showArrow}
+                viewportMode={viewportMode}
               />
             </Suspense>
           </Canvas>
