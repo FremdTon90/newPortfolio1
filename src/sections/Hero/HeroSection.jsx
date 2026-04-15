@@ -7,12 +7,50 @@ import React, {
   useLayoutEffect,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Text3D, useGLTF } from "@react-three/drei";
+import { Text3D, useGLTF, useTexture } from "@react-three/drei";
 import * as THREE from "three";
+import bricksWallTexture from "../../assets/images/textures/bricks.png";
+import checkerFloorDiffuse from "../../assets/images/textures/checker_floor_diffuse.png";
+import checkerFloorNormal from "../../assets/images/textures/checker_floor_normal.png";
+import checkerFloorRoughness from "../../assets/images/textures/checker_floor_roughness.png";
 import "./HeroSection.css";
 
+const BRICKS_WALL_URL = bricksWallTexture;
+const CHECKER_FLOOR_DIFFUSE_URL = checkerFloorDiffuse;
+const CHECKER_FLOOR_NORMAL_URL = checkerFloorNormal;
+const CHECKER_FLOOR_ROUGHNESS_URL = checkerFloorRoughness;
 const FONT_URL = `${import.meta.env.BASE_URL}fonts/helvetiker_bold.typeface.json`;
 const SIGN_URL = `${import.meta.env.BASE_URL}models/neon_open_sign.glb`;
+const LAMP_WALL_URL = `${import.meta.env.BASE_URL}models/lampWall.glb`
+const WALL_LAMP_CONFIG = {
+  lampPosition: [-16.96, 1.78, -8.45],
+  lampRotation: [0, Math.PI / 2, 0],
+  lampScale: 2.5,
+
+  modelOffset: [0, 0, 0],
+
+  // Diese Offsets sind jetzt relativ zur echten Birnenposition
+  bounceOffsetFromBulb: [0.0, 0.05, -0.16],
+  fillOffsetFromBulb: [0.28, -0.12, 0.02],
+
+  bulbIntensity: 34,
+  bounceIntensity: 6,
+  fillIntensity: 1.8,
+
+  bulbDistance: 8.5,
+  bounceDistance: 9,
+  fillDistance: 12,
+
+  bulbDecay: 1.5,
+  bounceDecay: 1.7,
+  fillDecay: 1.9,
+
+  glowInnerOpacity: 0.06,
+  glowOuterOpacity: 0.018,
+
+  showLightHelper: true,
+  helperSize: 0.02,
+};
 
 class HeroCanvasErrorBoundary extends React.Component {
   constructor(props) {
@@ -353,202 +391,6 @@ function createBrickTextures() {
   };
 }
 
-function createCheckerFloorTextures() {
-  const width = 2400;
-  const height = 1800;
-
-  const colorCanvas = document.createElement("canvas");
-  colorCanvas.width = width;
-  colorCanvas.height = height;
-  const ctx = colorCanvas.getContext("2d");
-
-  const heightCanvas = document.createElement("canvas");
-  heightCanvas.width = width;
-  heightCanvas.height = height;
-  const htx = heightCanvas.getContext("2d");
-
-  const roughCanvas = document.createElement("canvas");
-  roughCanvas.width = width;
-  roughCanvas.height = height;
-  const rtx = roughCanvas.getContext("2d");
-
-  const groutColor = "#171314";
-
-  ctx.fillStyle = groutColor;
-  ctx.fillRect(0, 0, width, height);
-
-  htx.fillStyle = "#8e8e8e";
-  htx.fillRect(0, 0, width, height);
-
-  rtx.fillStyle = "#f0f0f0";
-  rtx.fillRect(0, 0, width, height);
-
-  const tile = 105;
-  const grout = 5;
-  const cols = Math.ceil(width / tile);
-  const rows = Math.ceil(height / tile);
-
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      const x = col * tile;
-      const y = row * tile;
-
-      const tileX = x + grout / 2;
-      const tileY = y + grout / 2;
-      const tileW = tile - grout;
-      const tileH = tile - grout;
-
-      const isLight = (row + col) % 2 === 0;
-      const base = isLight ? 72 + Math.random() * 5 : 14 + Math.random() * 4;
-
-      const grad = ctx.createLinearGradient(tileX, tileY, tileX + tileW, tileY + tileH);
-      grad.addColorStop(0, `hsl(0 0% ${base + 2}%)`);
-      grad.addColorStop(0.52, `hsl(0 0% ${base}%)`);
-      grad.addColorStop(1, `hsl(0 0% ${Math.max(2, base - 2.5)}%)`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(tileX, tileY, tileW, tileH);
-
-      const topGlow = ctx.createLinearGradient(tileX, tileY, tileX, tileY + 24);
-      topGlow.addColorStop(0, "rgba(255,255,255,0.08)");
-      topGlow.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = topGlow;
-      ctx.fillRect(tileX, tileY, tileW, 24);
-
-      const diagSoft = ctx.createLinearGradient(tileX, tileY, tileX + tileW, tileY + tileH);
-      diagSoft.addColorStop(0.15, "rgba(255,255,255,0)");
-      diagSoft.addColorStop(0.42, "rgba(255,255,255,0.032)");
-      diagSoft.addColorStop(0.68, "rgba(255,255,255,0)");
-      ctx.fillStyle = diagSoft;
-      ctx.fillRect(tileX, tileY, tileW, tileH);
-
-      ctx.fillStyle = "rgba(255,255,255,0.03)";
-      ctx.fillRect(tileX, tileY, tileW, 1.5);
-
-      ctx.fillStyle = "rgba(0,0,0,0.10)";
-      ctx.fillRect(tileX, tileY + tileH - 1.5, tileW, 1.5);
-      ctx.fillRect(tileX + tileW - 1.5, tileY, 1.5, tileH);
-
-      for (let i = 0; i < 3; i += 1) {
-        drawSoftBlob(
-          ctx,
-          tileX + 10 + Math.random() * (tileW - 20),
-          tileY + 10 + Math.random() * (tileH - 20),
-          12 + Math.random() * 28,
-          8 + Math.random() * 18,
-          [
-            [0, `rgba(255,255,255,${0.008 + Math.random() * 0.012})`],
-            [1, "rgba(255,255,255,0)"],
-          ]
-        );
-      }
-
-      for (let i = 0; i < 2; i += 1) {
-        drawSoftBlob(
-          ctx,
-          tileX + 10 + Math.random() * (tileW - 20),
-          tileY + 10 + Math.random() * (tileH - 20),
-          10 + Math.random() * 22,
-          7 + Math.random() * 16,
-          [
-            [0, `rgba(0,0,0,${0.01 + Math.random() * 0.014})`],
-            [1, "rgba(0,0,0,0)"],
-          ]
-        );
-      }
-
-      drawFineScratches(ctx, tileX, tileY, tileW, tileH, 5, 0.022);
-
-      for (let i = 0; i < 12; i += 1) {
-        const nx = tileX + Math.random() * tileW;
-        const ny = tileY + Math.random() * tileH;
-        ctx.fillStyle = `rgba(255,255,255,${0.006 + Math.random() * 0.012})`;
-        ctx.fillRect(nx, ny, 1.2, 1.2);
-      }
-
-      htx.fillStyle = "#cfcfcf";
-      htx.fillRect(tileX, tileY, tileW, tileH);
-
-      htx.fillStyle = "#dbdbdb";
-      htx.fillRect(tileX, tileY, tileW, 2);
-
-      htx.fillStyle = "#adadad";
-      htx.fillRect(tileX, tileY + tileH - 2, tileW, 2);
-      htx.fillRect(tileX + tileW - 2, tileY, 2, tileH);
-
-      htx.fillStyle = "#767676";
-      htx.fillRect(x, y, tile, grout);
-      htx.fillRect(x, y, grout, tile);
-
-      for (let i = 0; i < 2; i += 1) {
-        drawSoftBlob(
-          htx,
-          tileX + 10 + Math.random() * (tileW - 20),
-          tileY + 10 + Math.random() * (tileH - 20),
-          10 + Math.random() * 20,
-          6 + Math.random() * 12,
-          [
-            [0, "rgba(215,215,215,0.08)"],
-            [1, "rgba(215,215,215,0)"],
-          ]
-        );
-      }
-
-      const roughBase = isLight
-        ? 74 + Math.floor(Math.random() * 14)
-        : 90 + Math.floor(Math.random() * 16);
-
-      rtx.fillStyle = `rgb(${roughBase},${roughBase},${roughBase})`;
-      rtx.fillRect(tileX, tileY, tileW, tileH);
-
-      for (let i = 0; i < 3; i += 1) {
-        const value = 48 + Math.floor(Math.random() * 24);
-        drawSoftBlob(
-          rtx,
-          tileX + 12 + Math.random() * (tileW - 24),
-          tileY + 10 + Math.random() * (tileH - 20),
-          12 + Math.random() * 26,
-          8 + Math.random() * 16,
-          [
-            [0, `rgba(${value},${value},${value},0.24)`],
-            [1, `rgba(${value},${value},${value},0)`],
-          ]
-        );
-      }
-
-      for (let i = 0; i < 2; i += 1) {
-        const value = 108 + Math.floor(Math.random() * 22);
-        drawSoftBlob(
-          rtx,
-          tileX + 12 + Math.random() * (tileW - 24),
-          tileY + 10 + Math.random() * (tileH - 20),
-          10 + Math.random() * 18,
-          8 + Math.random() * 14,
-          [
-            [0, `rgba(${value},${value},${value},0.14)`],
-            [1, `rgba(${value},${value},${value},0)`],
-          ]
-        );
-      }
-    }
-  }
-
-  addSpeckleNoise(ctx, width, height, 2200, 0.003, 0.01, false);
-  addSpeckleNoise(ctx, width, height, 1600, 0.003, 0.008, true);
-  addSpeckleNoise(rtx, width, height, 1800, 0.01, 0.024, true);
-
-  const colorMap = createColorTextureFromCanvas(colorCanvas);
-  const bumpMap = createDataTextureFromCanvas(heightCanvas);
-  const roughnessMap = createDataTextureFromCanvas(roughCanvas);
-  const normalMap = createNormalMapFromHeightCanvas(heightCanvas, 2.2);
-
-  return {
-    colorMap,
-    bumpMap,
-    roughnessMap,
-    normalMap,
-  };
-}
-
 function createSoftBeamTexture() {
   const size = 1024;
   const canvas = document.createElement("canvas");
@@ -619,6 +461,66 @@ function createGlowTexture() {
 }
 
 /* -----------------------------
+   Geladene Wandtextur + prozedurale Detailmaps
+----------------------------- */
+
+function useWallBrickTextures(repeatX = 1, repeatY = 1) {
+  const wallColorTexture = useTexture(BRICKS_WALL_URL);
+  const detailTextures = useMemo(() => createBrickTextures(), []);
+
+  return useMemo(() => {
+    const setupTexture = (source, isColor = false) => {
+      const tex = source.clone();
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(repeatX, repeatY);
+      tex.anisotropy = 8;
+      tex.magFilter = THREE.LinearFilter;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      if (isColor) tex.colorSpace = THREE.SRGBColorSpace;
+      tex.needsUpdate = true;
+      return tex;
+    };
+
+    return {
+      colorMap: setupTexture(wallColorTexture, true),
+      bumpMap: setupTexture(detailTextures.bumpMap),
+      roughnessMap: setupTexture(detailTextures.roughnessMap),
+      normalMap: setupTexture(detailTextures.normalMap),
+    };
+  }, [wallColorTexture, detailTextures, repeatX, repeatY]);
+}
+
+function useCheckerFloorTextures(repeatX = 6, repeatY = 5) {
+  const [colorMap, normalMap, roughnessMap] = useTexture([
+    CHECKER_FLOOR_DIFFUSE_URL,
+    CHECKER_FLOOR_NORMAL_URL,
+    CHECKER_FLOOR_ROUGHNESS_URL,
+  ]);
+
+  return useMemo(() => {
+    const setupTexture = (source, isColor = false) => {
+      const tex = source.clone();
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(repeatX, repeatY);
+      tex.anisotropy = 8;
+      tex.magFilter = THREE.LinearFilter;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      if (isColor) tex.colorSpace = THREE.SRGBColorSpace;
+      tex.needsUpdate = true;
+      return tex;
+    };
+
+    return {
+      colorMap: setupTexture(colorMap, true),
+      normalMap: setupTexture(normalMap, false),
+      roughnessMap: setupTexture(roughnessMap, false),
+    };
+  }, [colorMap, normalMap, roughnessMap, repeatX, repeatY]);
+}
+
+/* -----------------------------
    Scene parts
 ----------------------------- */
 
@@ -626,7 +528,7 @@ function BrickMaterial({
   powerState,
   textures,
   materialRef,
-  color = "#c97d72",
+  color = "#ffffff",
   emissive = "#2a0f10",
 }) {
   useFrame((state) => {
@@ -656,12 +558,12 @@ function BrickMaterial({
       ref={materialRef}
       map={textures.colorMap}
       bumpMap={textures.bumpMap}
-      bumpScale={0.08}
+      bumpScale={0.06}
       normalMap={textures.normalMap}
-      normalScale={new THREE.Vector2(0.65, 0.65)}
+      normalScale={new THREE.Vector2(0.5, 0.5)}
       roughnessMap={textures.roughnessMap}
       color={color}
-      roughness={0.95}
+      roughness={0.88}
       metalness={0}
       emissive={emissive}
       emissiveIntensity={0.08}
@@ -671,7 +573,7 @@ function BrickMaterial({
 
 function BackWall({ powerState }) {
   const wallMaterialRef = useRef(null);
-  const textures = useMemo(() => createBrickTextures(), []);
+  const textures = useWallBrickTextures(2.89, 1.42);
 
   return (
     <mesh position={[0, 0.15, -12.8]} receiveShadow>
@@ -680,8 +582,8 @@ function BackWall({ powerState }) {
         powerState={powerState}
         textures={textures}
         materialRef={wallMaterialRef}
-        color="#b97770"
-        emissive="#2a1112"
+        color="#ffffff"
+        emissive="#241011"
       />
     </mesh>
   );
@@ -690,7 +592,9 @@ function BackWall({ powerState }) {
 function SideWalls({ powerState }) {
   const leftRef = useRef(null);
   const rightRef = useRef(null);
-  const textures = useMemo(() => createBrickTextures(), []);
+
+  const leftTextures = useWallBrickTextures(1.51, 1.42);
+  const rightTextures = useWallBrickTextures(1.51, 1.42);
 
   useFrame((state) => {
     const refs = [leftRef.current, rightRef.current].filter(Boolean);
@@ -726,13 +630,13 @@ function SideWalls({ powerState }) {
         <planeGeometry args={[18.6, 18, 1, 1]} />
         <meshStandardMaterial
           ref={leftRef}
-          map={textures.colorMap}
-          bumpMap={textures.bumpMap}
-          bumpScale={0.08}
-          normalMap={textures.normalMap}
-          normalScale={new THREE.Vector2(0.62, 0.62)}
-          roughnessMap={textures.roughnessMap}
-          color="#9f625c"
+          map={leftTextures.colorMap}
+          bumpMap={leftTextures.bumpMap}
+          bumpScale={0.06}
+          normalMap={leftTextures.normalMap}
+          normalScale={new THREE.Vector2(0.48, 0.48)}
+          roughnessMap={leftTextures.roughnessMap}
+          color="#ffffff"
           roughness={0.96}
           metalness={0}
           emissive="#241011"
@@ -749,13 +653,13 @@ function SideWalls({ powerState }) {
         <planeGeometry args={[18.6, 18, 1, 1]} />
         <meshStandardMaterial
           ref={rightRef}
-          map={textures.colorMap}
-          bumpMap={textures.bumpMap}
-          bumpScale={0.08}
-          normalMap={textures.normalMap}
-          normalScale={new THREE.Vector2(0.62, 0.62)}
-          roughnessMap={textures.roughnessMap}
-          color="#9f625c"
+          map={rightTextures.colorMap}
+          bumpMap={rightTextures.bumpMap}
+          bumpScale={0.06}
+          normalMap={rightTextures.normalMap}
+          normalScale={new THREE.Vector2(0.48, 0.48)}
+          roughnessMap={rightTextures.roughnessMap}
+          color="#ffffff"
           roughness={0.96}
           metalness={0}
           emissive="#241011"
@@ -768,7 +672,7 @@ function SideWalls({ powerState }) {
 }
 
 function Floor() {
-  const tile = useMemo(() => createCheckerFloorTextures(), []);
+  const tile = useCheckerFloorTextures(6, 5);
 
   return (
     <mesh
@@ -779,16 +683,14 @@ function Floor() {
       <planeGeometry args={[42, 34, 1, 1]} />
       <meshPhysicalMaterial
         map={tile.colorMap}
-        bumpMap={tile.bumpMap}
-        bumpScale={0.045}
         normalMap={tile.normalMap}
-        normalScale={new THREE.Vector2(0.52, 0.52)}
+        normalScale={new THREE.Vector2(1.18, 1.18)}
         roughnessMap={tile.roughnessMap}
         color="#ffffff"
-        roughness={0.11}
+        roughness={0.14}
         metalness={0}
         clearcoat={1}
-        clearcoatRoughness={0.1}
+        clearcoatRoughness={0.045}
         reflectivity={1}
         ior={1.52}
       />
@@ -839,7 +741,7 @@ function SoftBeamWall({ pointer, powerState }) {
         depthWrite={false}
         depthTest={false}
         blending={THREE.AdditiveBlending}
-        color="#eefaff"
+        color="#fff4dc"
       />
     </mesh>
   );
@@ -868,7 +770,7 @@ function SoftBeamFloor({ pointer, powerState }) {
       delta
     );
 
-    const targetOpacity = powerState === "lamp" ? 0.115 : 0;
+    const targetOpacity = powerState === "lamp" ? 0.035 : 0;
     beamRef.current.material.opacity = THREE.MathUtils.damp(
       beamRef.current.material.opacity,
       targetOpacity,
@@ -892,7 +794,7 @@ function SoftBeamFloor({ pointer, powerState }) {
         depthWrite={false}
         depthTest={false}
         blending={THREE.AdditiveBlending}
-        color="#f0f8ff"
+        color="#fff1de"
       />
     </mesh>
   );
@@ -1274,6 +1176,276 @@ function NeonArrowSign({ visible }) {
   );
 }
 
+function WallLamp() {
+  const rootRef = useRef(null);
+  const wallGlowRef = useRef(null);
+  const wallGlowOuterRef = useRef(null);
+
+  const bulbLightRef = useRef(null);
+  const bounceLightRef = useRef(null);
+  const fillLightRef = useRef(null);
+
+  const { scene: lampSceneSource } = useGLTF(LAMP_WALL_URL);
+  const glowTexture = useMemo(() => createSoftBeamTexture(), []);
+
+  const { lampScene, bulbCenter, glassCenter } = useMemo(() => {
+    const cloned = lampSceneSource.clone(true);
+
+    let foundBulbCenter = new THREE.Vector3(0, 0.67, 0.61);
+    let foundGlassCenter = new THREE.Vector3(0, 0.73, 0.61);
+
+    cloned.updateMatrixWorld(true);
+
+    cloned.traverse((child) => {
+      if (!child.isMesh) return;
+
+      const sourceMaterial = Array.isArray(child.material)
+        ? child.material[0]
+        : child.material;
+
+      const meshName = (child.name || "").toLowerCase();
+      const materialName = (sourceMaterial?.name || "").toLowerCase();
+
+      const isGlass =
+        meshName.includes("glass") ||
+        meshName.includes("glas") ||
+        meshName.includes("shade") ||
+        meshName.includes("schirm") ||
+        materialName.includes("glass") ||
+        materialName.includes("glas") ||
+        materialName.includes("shade") ||
+        materialName.includes("schirm");
+
+      const isBulb =
+        meshName.includes("bulb") ||
+        meshName.includes("birne") ||
+        materialName.includes("bulb") ||
+        materialName.includes("birne");
+
+      if (isBulb) {
+        const box = new THREE.Box3().setFromObject(child);
+        foundBulbCenter = box.getCenter(new THREE.Vector3());
+
+        child.castShadow = false;
+        child.receiveShadow = false;
+
+        child.material = new THREE.MeshPhysicalMaterial({
+          color: "#ffffff",
+          roughness: 0.0,
+          metalness: 0,
+          transmission: 1.0,
+          thickness: 0.01,
+          ior: 1.52,
+          clearcoat: 1.0,
+          clearcoatRoughness: 0.0,
+          reflectivity: 1,
+          attenuationDistance: 1000,
+          attenuationColor: "#ffffff",
+          transparent: true,
+          opacity: 1,
+          side: THREE.FrontSide,
+        });
+
+        child.material.toneMapped = true;
+        return;
+      }
+
+      if (isGlass) {
+        const box = new THREE.Box3().setFromObject(child);
+        foundGlassCenter = box.getCenter(new THREE.Vector3());
+
+        child.castShadow = false;
+        child.receiveShadow = true;
+
+        child.material = new THREE.MeshPhysicalMaterial({
+          color: "#ffffff",
+          roughness: 0.0,
+          metalness: 0,
+          transmission: 1.0,
+          thickness: 0.01,
+          ior: 1.52,
+          clearcoat: 1.0,
+          clearcoatRoughness: 0.0,
+          reflectivity: 1,
+          transparent: true,
+          opacity: 1,
+          side: THREE.FrontSide,
+        });
+
+        child.material.toneMapped = true;
+        return;
+      }
+
+      child.castShadow = true;
+      child.receiveShadow = true;
+
+      child.material = new THREE.MeshStandardMaterial({
+        color: "#1f1711",
+        roughness: 0.7,
+        metalness: 0.22,
+        emissive: new THREE.Color("#080503"),
+        emissiveIntensity: 0.01,
+        side: THREE.DoubleSide,
+      });
+
+      child.material.toneMapped = true;
+    });
+
+    return {
+      lampScene: cloned,
+      bulbCenter: foundBulbCenter,
+      glassCenter: foundGlassCenter,
+    };
+  }, [lampSceneSource]);
+
+  useFrame((_, delta) => {
+    const cfg = WALL_LAMP_CONFIG;
+
+    if (wallGlowRef.current?.material) {
+      wallGlowRef.current.material.opacity = THREE.MathUtils.damp(
+        wallGlowRef.current.material.opacity,
+        cfg.glowInnerOpacity,
+        5,
+        delta
+      );
+    }
+
+    if (wallGlowOuterRef.current?.material) {
+      wallGlowOuterRef.current.material.opacity = THREE.MathUtils.damp(
+        wallGlowOuterRef.current.material.opacity,
+        cfg.glowOuterOpacity,
+        5,
+        delta
+      );
+    }
+
+    if (bulbLightRef.current) {
+      bulbLightRef.current.intensity = THREE.MathUtils.damp(
+        bulbLightRef.current.intensity,
+        cfg.bulbIntensity,
+        5,
+        delta
+      );
+    }
+
+    if (bounceLightRef.current) {
+      bounceLightRef.current.intensity = THREE.MathUtils.damp(
+        bounceLightRef.current.intensity,
+        cfg.bounceIntensity,
+        5,
+        delta
+      );
+    }
+
+    if (fillLightRef.current) {
+      fillLightRef.current.intensity = THREE.MathUtils.damp(
+        fillLightRef.current.intensity,
+        cfg.fillIntensity,
+        5,
+        delta
+      );
+    }
+  });
+
+  const bouncePos = [
+    bulbCenter.x + WALL_LAMP_CONFIG.bounceOffsetFromBulb[0],
+    bulbCenter.y + WALL_LAMP_CONFIG.bounceOffsetFromBulb[1],
+    bulbCenter.z + WALL_LAMP_CONFIG.bounceOffsetFromBulb[2],
+  ];
+
+  const fillPos = [
+    bulbCenter.x + WALL_LAMP_CONFIG.fillOffsetFromBulb[0],
+    bulbCenter.y + WALL_LAMP_CONFIG.fillOffsetFromBulb[1],
+    bulbCenter.z + WALL_LAMP_CONFIG.fillOffsetFromBulb[2],
+  ];
+
+  return (
+    <group
+      ref={rootRef}
+      position={WALL_LAMP_CONFIG.lampPosition}
+      rotation={WALL_LAMP_CONFIG.lampRotation}
+      scale={WALL_LAMP_CONFIG.lampScale}
+    >
+      <mesh
+        ref={wallGlowOuterRef}
+        position={[glassCenter.x, glassCenter.y, glassCenter.z - 0.18]}
+        renderOrder={1}
+      >
+        <planeGeometry args={[0.62, 0.78]} />
+        <meshBasicMaterial
+          map={glowTexture}
+          color="#ffb45d"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+
+      <mesh
+        ref={wallGlowRef}
+        position={[glassCenter.x, glassCenter.y, glassCenter.z - 0.14]}
+        renderOrder={2}
+      >
+        <planeGeometry args={[0.26, 0.34]} />
+        <meshBasicMaterial
+          map={glowTexture}
+          color="#ffd391"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+
+      <group position={WALL_LAMP_CONFIG.modelOffset}>
+        <primitive object={lampScene} />
+      </group>
+
+      <pointLight
+        ref={bulbLightRef}
+        position={[bulbCenter.x, bulbCenter.y, bulbCenter.z]}
+        color="#ffd89e"
+        intensity={0}
+        distance={WALL_LAMP_CONFIG.bulbDistance}
+        decay={WALL_LAMP_CONFIG.bulbDecay}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-bias={-0.00008}
+        shadow-normalBias={0.015}
+      />
+
+      <pointLight
+        ref={bounceLightRef}
+        position={bouncePos}
+        color="#ffc877"
+        intensity={0}
+        distance={WALL_LAMP_CONFIG.bounceDistance}
+        decay={WALL_LAMP_CONFIG.bounceDecay}
+      />
+
+      <pointLight
+        ref={fillLightRef}
+        position={fillPos}
+        color="#ffba64"
+        intensity={0}
+        distance={WALL_LAMP_CONFIG.fillDistance}
+        decay={WALL_LAMP_CONFIG.fillDecay}
+      />
+
+      {WALL_LAMP_CONFIG.showLightHelper && (
+        <mesh position={[bulbCenter.x, bulbCenter.y, bulbCenter.z]} renderOrder={10}>
+          <sphereGeometry args={[WALL_LAMP_CONFIG.helperSize, 16, 16]} />
+          <meshBasicMaterial color="#00ffff" toneMapped={false} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
 function getMeshWidth(ref) {
   if (!ref.current) return 0;
   ref.current.geometry.computeBoundingBox();
@@ -1648,7 +1820,7 @@ function PowerLights({ powerState, pointer, showArrow }) {
       <spotLight
         ref={spotRef}
         position={[0, 0.35, 11.8]}
-        color="#f4fcff"
+        color="#fff6e8"
         castShadow
         shadow-mapSize-width={4096}
         shadow-mapSize-height={4096}
@@ -1669,6 +1841,7 @@ function Scene({ powerState, pointer, introProgress, showArrow }) {
       <SoftBeamWall pointer={pointer} powerState={powerState} />
       <SoftBeamFloor pointer={pointer} powerState={powerState} />
       <NeonArrowSign visible={showArrow} />
+      <WallLamp />
       <PowerLights
         powerState={powerState}
         pointer={pointer}
@@ -1800,3 +1973,8 @@ export default function HeroSection() {
 }
 
 useGLTF.preload(SIGN_URL);
+useGLTF.preload(LAMP_WALL_URL);
+useTexture.preload(BRICKS_WALL_URL);
+useTexture.preload(CHECKER_FLOOR_DIFFUSE_URL);
+useTexture.preload(CHECKER_FLOOR_NORMAL_URL);
+useTexture.preload(CHECKER_FLOOR_ROUGHNESS_URL);
