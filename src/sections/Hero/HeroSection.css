@@ -3,8 +3,12 @@
     position: relative;
     min-height: 100svh;
     overflow: hidden;
-    background: radial-gradient(circle at 18% 18%, rgba(103, 232, 249, 0.08), transparent 22%), radial-gradient(circle at 80% 10%, rgba(139, 92, 246, 0.07), transparent 24%), linear-gradient(180deg, #01040a 0%, #040816 56%, #07101c 100%);
+    background:
+        radial-gradient(circle at 18% 18%, rgba(103, 232, 249, 0.08), transparent 22%),
+        radial-gradient(circle at 80% 10%, rgba(139, 92, 246, 0.07), transparent 24%),
+        linear-gradient(180deg, #01040a 0%, #040816 56%, #07101c 100%);
     isolation: isolate;
+    overscroll-behavior: contain;
 }
 
 .hero-canvas-wrap {
@@ -78,7 +82,11 @@
 .hero-scroll-line {
     width: 72px;
     height: 1px;
-    background: linear-gradient(90deg, rgba(143, 243, 255, 0.22), rgba(143, 243, 255, 0.92));
+    background: linear-gradient(
+        90deg,
+        rgba(143, 243, 255, 0.22),
+        rgba(143, 243, 255, 0.92)
+    );
 }
 
 .hero.hero-power-flicker::after,
@@ -88,7 +96,9 @@
     inset: 0;
     z-index: 2;
     pointer-events: none;
-    background: radial-gradient(circle at 50% 46%, rgba(126, 232, 255, 0.05), transparent 30%), linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.18));
+    background:
+        radial-gradient(circle at 50% 46%, rgba(126, 232, 255, 0.05), transparent 30%),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.18));
 }
 
 .hero.hero-power-flicker::after {
@@ -181,14 +191,55 @@
     .hero.hero-3d {
         --hero-side: 16px;
     }
+
+    .hero-overlay-ui {
+        padding-top: 20px;
+        padding-bottom: 28px;
+    }
+
     .hero-badge-row {
         gap: 10px;
     }
+
     .hero-badge {
         padding: 9px 13px;
         font-size: 0.84rem;
     }
+
     .hero-scroll {
         display: none;
+    }
+}
+
+@media (max-width: 768px) and (orientation: portrait) {
+    .hero.hero-3d {
+        min-height: 100svh;
+    }
+
+    .hero-overlay-ui {
+        justify-content: flex-start;
+        padding-top: 18px;
+    }
+
+    .hero-badge-row {
+        max-width: 100%;
+        gap: 8px;
+    }
+
+    .hero-badge {
+        font-size: 0.8rem;
+        padding: 8px 12px;
+    }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+    .hero-overlay-ui {
+        padding-top: 16px;
+        padding-bottom: 20px;
+    }
+
+    .hero-badge {
+        font-size: 0.78rem;
+        padding: 7px 11px;
     }
 }
