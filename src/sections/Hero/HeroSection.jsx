@@ -29,26 +29,25 @@ const WALL_LAMP_CONFIG = {
 
   modelOffset: [0, 0, 0],
 
-  // Diese Offsets sind jetzt relativ zur echten Birnenposition
-  bounceOffsetFromBulb: [0.0, 0.05, -0.16],
-  fillOffsetFromBulb: [0.28, -0.12, 0.02],
+  bounceOffsetFromBulb: [0.0, 0.06, -0.22],
+  fillOffsetFromBulb: [0.42, -0.12, 0.06],
 
-  bulbIntensity: 34,
-  bounceIntensity: 6,
-  fillIntensity: 1.8,
+  bulbIntensity: 82,
+  bounceIntensity: 14,
+  fillIntensity: 5.5,
 
-  bulbDistance: 8.5,
-  bounceDistance: 9,
-  fillDistance: 12,
+  bulbDistance: 20,
+  bounceDistance: 18,
+  fillDistance: 21,
 
-  bulbDecay: 1.5,
-  bounceDecay: 1.7,
-  fillDecay: 1.9,
+  bulbDecay: 1.3,
+  bounceDecay: 1.5,
+  fillDecay: 1.65,
 
-  glowInnerOpacity: 0.06,
-  glowOuterOpacity: 0.018,
+  glowInnerOpacity: 0.34,
+  glowOuterOpacity: 0.16,
 
-  showLightHelper: true,
+  showLightHelper: false,
   helperSize: 0.02,
 };
 
@@ -558,9 +557,9 @@ function BrickMaterial({
       ref={materialRef}
       map={textures.colorMap}
       bumpMap={textures.bumpMap}
-      bumpScale={0.06}
+      bumpScale={0.018}
       normalMap={textures.normalMap}
-      normalScale={new THREE.Vector2(0.5, 0.5)}
+      normalScale={new THREE.Vector2(0.16, 0.16)}
       roughnessMap={textures.roughnessMap}
       color={color}
       roughness={0.88}
@@ -632,9 +631,9 @@ function SideWalls({ powerState }) {
           ref={leftRef}
           map={leftTextures.colorMap}
           bumpMap={leftTextures.bumpMap}
-          bumpScale={0.06}
+          bumpScale={0.018}
           normalMap={leftTextures.normalMap}
-          normalScale={new THREE.Vector2(0.48, 0.48)}
+          normalScale={new THREE.Vector2(0.16, 0.16)}
           roughnessMap={leftTextures.roughnessMap}
           color="#ffffff"
           roughness={0.96}
@@ -655,9 +654,9 @@ function SideWalls({ powerState }) {
           ref={rightRef}
           map={rightTextures.colorMap}
           bumpMap={rightTextures.bumpMap}
-          bumpScale={0.06}
+          bumpScale={0.018}
           normalMap={rightTextures.normalMap}
-          normalScale={new THREE.Vector2(0.48, 0.48)}
+          normalScale={new THREE.Vector2(0.16, 0.16)}
           roughnessMap={rightTextures.roughnessMap}
           color="#ffffff"
           roughness={0.96}
@@ -1180,123 +1179,131 @@ function WallLamp() {
   const rootRef = useRef(null);
   const wallGlowRef = useRef(null);
   const wallGlowOuterRef = useRef(null);
+  const innerGlowARef = useRef(null);
+  const innerGlowBRef = useRef(null);
+  const innerGlowCRef = useRef(null);
 
   const bulbLightRef = useRef(null);
   const bounceLightRef = useRef(null);
   const fillLightRef = useRef(null);
+  const bulbCoreLightRef = useRef(null);
 
   const { scene: lampSceneSource } = useGLTF(LAMP_WALL_URL);
   const glowTexture = useMemo(() => createSoftBeamTexture(), []);
 
-  const { lampScene, bulbCenter, glassCenter } = useMemo(() => {
-    const cloned = lampSceneSource.clone(true);
+  const { lampScene, bulbCenter, glassCenter, bulbMaterials, glassMaterials } =
+    useMemo(() => {
+      const cloned = lampSceneSource.clone(true);
 
-    let foundBulbCenter = new THREE.Vector3(0, 0.67, 0.61);
-    let foundGlassCenter = new THREE.Vector3(0, 0.73, 0.61);
+      let foundBulbCenter = new THREE.Vector3(0, 0.6739, 0.6136);
+      let foundGlassCenter = new THREE.Vector3(0, 0.7332, 0.6135);
 
-    cloned.updateMatrixWorld(true);
+      const foundBulbMaterials = [];
+      const foundGlassMaterials = [];
 
-    cloned.traverse((child) => {
-      if (!child.isMesh) return;
+      cloned.updateMatrixWorld(true);
 
-      const sourceMaterial = Array.isArray(child.material)
-        ? child.material[0]
-        : child.material;
+      cloned.traverse((child) => {
+        if (!child.isMesh) return;
 
-      const meshName = (child.name || "").toLowerCase();
-      const materialName = (sourceMaterial?.name || "").toLowerCase();
+        const sourceMaterial = Array.isArray(child.material)
+          ? child.material[0]
+          : child.material;
 
-      const isGlass =
-        meshName.includes("glass") ||
-        meshName.includes("glas") ||
-        meshName.includes("shade") ||
-        meshName.includes("schirm") ||
-        materialName.includes("glass") ||
-        materialName.includes("glas") ||
-        materialName.includes("shade") ||
-        materialName.includes("schirm");
+        const meshName = (child.name || "").toLowerCase();
+        const materialName = (sourceMaterial?.name || "").toLowerCase();
 
-      const isBulb =
-        meshName.includes("bulb") ||
-        meshName.includes("birne") ||
-        materialName.includes("bulb") ||
-        materialName.includes("birne");
+        const isGlass =
+          meshName.includes("glass") ||
+          meshName.includes("glas") ||
+          meshName.includes("shade") ||
+          meshName.includes("schirm") ||
+          materialName.includes("glass") ||
+          materialName.includes("glas") ||
+          materialName.includes("shade") ||
+          materialName.includes("schirm");
 
-      if (isBulb) {
-        const box = new THREE.Box3().setFromObject(child);
-        foundBulbCenter = box.getCenter(new THREE.Vector3());
+        const isBulb =
+          meshName.includes("bulb") ||
+          meshName.includes("birne") ||
+          materialName.includes("bulb") ||
+          materialName.includes("birne");
 
-        child.castShadow = false;
-        child.receiveShadow = false;
+        if (isBulb) {
+          const box = new THREE.Box3().setFromObject(child);
+          foundBulbCenter = box.getCenter(new THREE.Vector3());
 
-        child.material = new THREE.MeshPhysicalMaterial({
-          color: "#ffffff",
-          roughness: 0.0,
-          metalness: 0,
-          transmission: 1.0,
-          thickness: 0.01,
-          ior: 1.52,
-          clearcoat: 1.0,
-          clearcoatRoughness: 0.0,
-          reflectivity: 1,
-          attenuationDistance: 1000,
-          attenuationColor: "#ffffff",
-          transparent: true,
-          opacity: 1,
-          side: THREE.FrontSide,
-        });
+          child.castShadow = false;
+          child.receiveShadow = false;
 
-        child.material.toneMapped = true;
-        return;
-      }
+          const bulbMaterial = new THREE.MeshStandardMaterial({
+            color: "#fffdf6",
+            emissive: new THREE.Color("#ffe9b8"),
+            emissiveIntensity: 0,
+            roughness: 0.01,
+            metalness: 0,
+            transparent: false,
+            side: THREE.DoubleSide,
+            toneMapped: false,
+          });
 
-      if (isGlass) {
-        const box = new THREE.Box3().setFromObject(child);
-        foundGlassCenter = box.getCenter(new THREE.Vector3());
+          child.material = bulbMaterial;
+          foundBulbMaterials.push(bulbMaterial);
+          return;
+        }
 
-        child.castShadow = false;
+        if (isGlass) {
+          const box = new THREE.Box3().setFromObject(child);
+          foundGlassCenter = box.getCenter(new THREE.Vector3());
+
+          child.castShadow = false;
+          child.receiveShadow = true;
+
+          const glassMaterial = new THREE.MeshPhysicalMaterial({
+            color: "#fffaf0",
+            roughness: 0.03,
+            metalness: 0,
+            transmission: 1,
+            thickness: 0.003,
+            ior: 1.52,
+            clearcoat: 1,
+            clearcoatRoughness: 0.03,
+            reflectivity: 1,
+            transparent: true,
+            opacity: 1,
+            side: THREE.DoubleSide,
+            emissive: new THREE.Color("#ffcf88"),
+            emissiveIntensity: 0,
+            toneMapped: true,
+          });
+
+          child.material = glassMaterial;
+          foundGlassMaterials.push(glassMaterial);
+          return;
+        }
+
+        child.castShadow = true;
         child.receiveShadow = true;
 
-        child.material = new THREE.MeshPhysicalMaterial({
-          color: "#ffffff",
-          roughness: 0.0,
-          metalness: 0,
-          transmission: 1.0,
-          thickness: 0.01,
-          ior: 1.52,
-          clearcoat: 1.0,
-          clearcoatRoughness: 0.0,
-          reflectivity: 1,
-          transparent: true,
-          opacity: 1,
-          side: THREE.FrontSide,
+        child.material = new THREE.MeshStandardMaterial({
+          color: "#1f1711",
+          roughness: 0.72,
+          metalness: 0.22,
+          emissive: new THREE.Color("#080503"),
+          emissiveIntensity: 0.01,
+          side: THREE.DoubleSide,
+          toneMapped: true,
         });
-
-        child.material.toneMapped = true;
-        return;
-      }
-
-      child.castShadow = true;
-      child.receiveShadow = true;
-
-      child.material = new THREE.MeshStandardMaterial({
-        color: "#1f1711",
-        roughness: 0.7,
-        metalness: 0.22,
-        emissive: new THREE.Color("#080503"),
-        emissiveIntensity: 0.01,
-        side: THREE.DoubleSide,
       });
 
-      child.material.toneMapped = true;
-    });
-
-    return {
-      lampScene: cloned,
-      bulbCenter: foundBulbCenter,
-      glassCenter: foundGlassCenter,
-    };
-  }, [lampSceneSource]);
+      return {
+        lampScene: cloned,
+        bulbCenter: foundBulbCenter,
+        glassCenter: foundGlassCenter,
+        bulbMaterials: foundBulbMaterials,
+        glassMaterials: foundGlassMaterials,
+      };
+    }, [lampSceneSource]);
 
   useFrame((_, delta) => {
     const cfg = WALL_LAMP_CONFIG;
@@ -1304,8 +1311,8 @@ function WallLamp() {
     if (wallGlowRef.current?.material) {
       wallGlowRef.current.material.opacity = THREE.MathUtils.damp(
         wallGlowRef.current.material.opacity,
-        cfg.glowInnerOpacity,
-        5,
+        0.42,
+        6,
         delta
       );
     }
@@ -1313,11 +1320,56 @@ function WallLamp() {
     if (wallGlowOuterRef.current?.material) {
       wallGlowOuterRef.current.material.opacity = THREE.MathUtils.damp(
         wallGlowOuterRef.current.material.opacity,
-        cfg.glowOuterOpacity,
-        5,
+        0.22,
+        6,
         delta
       );
     }
+
+    if (innerGlowARef.current?.material) {
+      innerGlowARef.current.material.opacity = THREE.MathUtils.damp(
+        innerGlowARef.current.material.opacity,
+        1.18,
+        10,
+        delta
+      );
+    }
+
+    if (innerGlowBRef.current?.material) {
+      innerGlowBRef.current.material.opacity = THREE.MathUtils.damp(
+        innerGlowBRef.current.material.opacity,
+        1.0,
+        10,
+        delta
+      );
+    }
+
+    if (innerGlowCRef.current?.material) {
+      innerGlowCRef.current.material.opacity = THREE.MathUtils.damp(
+        innerGlowCRef.current.material.opacity,
+        0.86,
+        10,
+        delta
+      );
+    }
+
+    bulbMaterials.forEach((mat) => {
+      mat.emissiveIntensity = THREE.MathUtils.damp(
+        mat.emissiveIntensity,
+        52,
+        8,
+        delta
+      );
+    });
+
+    glassMaterials.forEach((mat) => {
+      mat.emissiveIntensity = THREE.MathUtils.damp(
+        mat.emissiveIntensity,
+        0.32,
+        7,
+        delta
+      );
+    });
 
     if (bulbLightRef.current) {
       bulbLightRef.current.intensity = THREE.MathUtils.damp(
@@ -1345,7 +1397,18 @@ function WallLamp() {
         delta
       );
     }
+
+    if (bulbCoreLightRef.current) {
+      bulbCoreLightRef.current.intensity = THREE.MathUtils.damp(
+        bulbCoreLightRef.current.intensity,
+        24,
+        6,
+        delta
+      );
+    }
   });
+
+  const bulbPos = [bulbCenter.x, bulbCenter.y, bulbCenter.z];
 
   const bouncePos = [
     bulbCenter.x + WALL_LAMP_CONFIG.bounceOffsetFromBulb[0],
@@ -1371,7 +1434,7 @@ function WallLamp() {
         position={[glassCenter.x, glassCenter.y, glassCenter.z - 0.18]}
         renderOrder={1}
       >
-        <planeGeometry args={[0.62, 0.78]} />
+        <planeGeometry args={[0.58, 0.76]} />
         <meshBasicMaterial
           map={glowTexture}
           color="#ffb45d"
@@ -1385,10 +1448,10 @@ function WallLamp() {
 
       <mesh
         ref={wallGlowRef}
-        position={[glassCenter.x, glassCenter.y, glassCenter.z - 0.14]}
+        position={[glassCenter.x, glassCenter.y, glassCenter.z - 0.13]}
         renderOrder={2}
       >
-        <planeGeometry args={[0.26, 0.34]} />
+        <planeGeometry args={[0.32, 0.44]} />
         <meshBasicMaterial
           map={glowTexture}
           color="#ffd391"
@@ -1404,18 +1467,73 @@ function WallLamp() {
         <primitive object={lampScene} />
       </group>
 
+      <mesh
+        ref={innerGlowARef}
+        position={bulbPos}
+        rotation={[0, 0, 0]}
+        renderOrder={4}
+      >
+        <planeGeometry args={[0.24, 0.34]} />
+        <meshBasicMaterial
+          map={glowTexture}
+          color="#fff4d2"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+
+      <mesh
+        ref={innerGlowBRef}
+        position={bulbPos}
+        rotation={[0, Math.PI / 2, 0]}
+        renderOrder={5}
+      >
+        <planeGeometry args={[0.2, 0.28]} />
+        <meshBasicMaterial
+          map={glowTexture}
+          color="#ffebb8"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+
+      <mesh
+        ref={innerGlowCRef}
+        position={bulbPos}
+        rotation={[Math.PI / 2, 0, 0]}
+        renderOrder={6}
+      >
+        <planeGeometry args={[0.16, 0.16]} />
+        <meshBasicMaterial
+          map={glowTexture}
+          color="#fffef7"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+
       <pointLight
         ref={bulbLightRef}
-        position={[bulbCenter.x, bulbCenter.y, bulbCenter.z]}
+        position={bulbPos}
         color="#ffd89e"
         intensity={0}
         distance={WALL_LAMP_CONFIG.bulbDistance}
         decay={WALL_LAMP_CONFIG.bulbDecay}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-bias={-0.00008}
-        shadow-normalBias={0.015}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+        shadow-bias={-0.00004}
+        shadow-normalBias={0.02}
+        shadow-radius={34}
       />
 
       <pointLight
@@ -1436,8 +1554,17 @@ function WallLamp() {
         decay={WALL_LAMP_CONFIG.fillDecay}
       />
 
+      <pointLight
+        ref={bulbCoreLightRef}
+        position={bulbPos}
+        color="#fff3d2"
+        intensity={0}
+        distance={4.2}
+        decay={1.9}
+      />
+
       {WALL_LAMP_CONFIG.showLightHelper && (
-        <mesh position={[bulbCenter.x, bulbCenter.y, bulbCenter.z]} renderOrder={10}>
+        <mesh position={bulbPos} renderOrder={10}>
           <sphereGeometry args={[WALL_LAMP_CONFIG.helperSize, 16, 16]} />
           <meshBasicMaterial color="#00ffff" toneMapped={false} />
         </mesh>
