@@ -491,20 +491,23 @@ function ResponsiveCamera({ viewportMode }) {
   useEffect(() => {
     let nextFov = 36;
     let nextPosition = [0, 0, 18];
+    let lookAtTarget = [0, 0.12, -4.6];
 
     if (viewportMode === "mobile-landscape") {
-      nextFov = 39;
-      nextPosition = [0, 0.08, 18.8];
+      nextFov = 43;
+      nextPosition = [0, 0.06, 19.8];
+      lookAtTarget = [0, 0.12, -4.8];
     }
 
     if (viewportMode === "mobile-portrait") {
-      nextFov = 52;
-      nextPosition = [0, 0.2, 20.8];
+      nextFov = 68;
+      nextPosition = [0, 0.12, 25.4];
+      lookAtTarget = [0, 0.06, -5.0];
     }
 
     camera.position.set(...nextPosition);
     camera.fov = nextFov;
-    camera.lookAt(0, 0.12, -4.6);
+    camera.lookAt(...lookAtTarget);
     camera.updateProjectionMatrix();
   }, [camera, viewportMode, size.width, size.height]);
 
@@ -791,7 +794,7 @@ function SoftBeamFloor({ pointer, powerState }) {
   );
 }
 
-function NeonArrowSign({ visible }) {
+function NeonArrowSign({ visible, viewportMode }) {
   const rootRef = useRef(null);
   const signRef = useRef(null);
   const wallGlowRef = useRef(null);
@@ -889,15 +892,24 @@ function NeonArrowSign({ visible }) {
     return cloned;
   }, [scene]);
 
+  const isPortraitMobile = viewportMode === "mobile-portrait";
+  const isLandscapeMobile = viewportMode === "mobile-landscape";
+
+  const signPosition = useMemo(() => {
+    if (isPortraitMobile) return [6.9, 0.98, -9.2];
+    if (isLandscapeMobile) return [8.5, 1.04, -9.5];
+    return [9.55, 1.08, -9.9];
+  }, [isPortraitMobile, isLandscapeMobile]);
+
   const scaleFactor = useMemo(() => {
     const box = new THREE.Box3().setFromObject(signScene);
     const size = box.getSize(new THREE.Vector3());
 
-    const targetWidth = 4.0;
+    const targetWidth = isPortraitMobile ? 3.2 : isLandscapeMobile ? 3.6 : 4.0;
     const safeWidth = Math.max(size.x, 0.001);
 
     return targetWidth / safeWidth;
-  }, [signScene]);
+  }, [signScene, isPortraitMobile, isLandscapeMobile]);
 
   useFrame((state, delta) => {
     if (!rootRef.current) return;
@@ -1054,7 +1066,7 @@ function NeonArrowSign({ visible }) {
   return (
     <group
       ref={rootRef}
-      position={[9.55, 1.08, -9.9]}
+      position={signPosition}
       rotation={[0, Math.PI + 0.22, 0]}
       scale={0.82}
     >
@@ -1167,7 +1179,7 @@ function NeonArrowSign({ visible }) {
   );
 }
 
-function WallLamp() {
+function WallLamp({ viewportMode }) {
   const rootRef = useRef(null);
   const wallGlowRef = useRef(null);
   const wallGlowOuterRef = useRef(null);
@@ -1400,6 +1412,12 @@ function WallLamp() {
     }
   });
 
+  const lampPosition = useMemo(() => {
+    if (viewportMode === "mobile-portrait") return [-10.9, 1.78, -7.15];
+    if (viewportMode === "mobile-landscape") return [-11.8, 1.78, -7.3];
+    return WALL_LAMP_CONFIG.lampPosition;
+  }, [viewportMode]);
+
   const bulbPos = [bulbCenter.x, bulbCenter.y, bulbCenter.z];
 
   const bouncePos = [
@@ -1417,7 +1435,7 @@ function WallLamp() {
   return (
     <group
       ref={rootRef}
-      position={WALL_LAMP_CONFIG.lampPosition}
+      position={lampPosition}
       rotation={WALL_LAMP_CONFIG.lampRotation}
       scale={WALL_LAMP_CONFIG.lampScale}
     >
@@ -1572,7 +1590,7 @@ function getMeshWidth(ref) {
   return box ? box.max.x - box.min.x : 0;
 }
 
-function TextBlock({ powerState, introProgress }) {
+function TextBlock({ powerState, introProgress, viewportMode }) {
   const rootRef = useRef(null);
 
   const dustinRef = useRef(null);
@@ -1588,10 +1606,62 @@ function TextBlock({ powerState, introProgress }) {
     expX: -10,
   });
 
-  const lineY1 = 1.72;
-  const lineY2 = -0.18;
-  const lineY3 = -1.95;
-  const wordGap = 0.46;
+  const config = useMemo(() => {
+    if (viewportMode === "mobile-portrait") {
+      return {
+        lineY1: 1.26,
+        lineY2: -0.04,
+        lineY3: -1.26,
+        wordGap: 0.24,
+        rootPosition: [0, 0.18, -1.35],
+        largeSize: 0.82,
+        mediumSize: 0.72,
+        largeHeight: 0.34,
+        mediumHeight: 0.31,
+        largeBevelThickness: 0.016,
+        mediumBevelThickness: 0.014,
+        largeBevelSize: 0.015,
+        mediumBevelSize: 0.013,
+        scaleX: 1.0,
+      };
+    }
+
+    if (viewportMode === "mobile-landscape") {
+      return {
+        lineY1: 1.52,
+        lineY2: -0.12,
+        lineY3: -1.62,
+        wordGap: 0.34,
+        rootPosition: [0, 0.14, -1.02],
+        largeSize: 1.0,
+        mediumSize: 0.88,
+        largeHeight: 0.42,
+        mediumHeight: 0.38,
+        largeBevelThickness: 0.018,
+        mediumBevelThickness: 0.016,
+        largeBevelSize: 0.017,
+        mediumBevelSize: 0.014,
+        scaleX: 1.03,
+      };
+    }
+
+    return {
+      lineY1: 1.72,
+      lineY2: -0.18,
+      lineY3: -1.95,
+      wordGap: 0.46,
+      rootPosition: [0, 0.12, -0.85],
+      largeSize: 1.18,
+      mediumSize: 1.02,
+      largeHeight: 0.51,
+      mediumHeight: 0.45,
+      largeBevelThickness: 0.022,
+      mediumBevelThickness: 0.02,
+      largeBevelSize: 0.02,
+      mediumBevelSize: 0.017,
+      scaleX: 1.08,
+    };
+  }, [viewportMode]);
 
   const baseColor = powerState === "lamp" ? "#f1f1f1" : "#e2e8f4";
   const accentColor = powerState === "lamp" ? "#66dff0" : "#9bf6ff";
@@ -1616,7 +1686,7 @@ function TextBlock({ powerState, introProgress }) {
       const digitalWidth = getMeshWidth(digitalRef);
 
       const digitalX = -digitalWidth / 2;
-      const buildsX = digitalX - wordGap - buildsWidth;
+      const buildsX = digitalX - config.wordGap - buildsWidth;
       const leftAlignedX = buildsX;
 
       setPositions({
@@ -1630,7 +1700,7 @@ function TextBlock({ powerState, introProgress }) {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [config.wordGap, config.largeSize, config.mediumSize, config.scaleX]);
 
   useFrame((_, delta) => {
     if (!rootRef.current) return;
@@ -1638,27 +1708,31 @@ function TextBlock({ powerState, introProgress }) {
     const introYOffset = THREE.MathUtils.lerp(0.65, 0, introProgress);
     rootRef.current.position.y = THREE.MathUtils.damp(
       rootRef.current.position.y,
-      introYOffset,
+      config.rootPosition[1] + introYOffset,
       10,
       delta
     );
   });
 
   return (
-    <group ref={rootRef} position={[0, 0.12, -0.85]} visible={layoutReady}>
-      <group position={[positions.dustinX, lineY1, 0]}>
+    <group
+      ref={rootRef}
+      position={config.rootPosition}
+      visible={layoutReady}
+    >
+      <group position={[positions.dustinX, config.lineY1, 0]}>
         <Text3D
           ref={dustinRef}
           font={FONT_URL}
-          size={1.18}
-          height={0.51}
+          size={config.largeSize}
+          height={config.largeHeight}
           curveSegments={10}
           bevelEnabled
-          bevelThickness={0.022}
-          bevelSize={0.02}
+          bevelThickness={config.largeBevelThickness}
+          bevelSize={config.largeBevelSize}
           bevelOffset={0}
-          bevelSegments={5}
-          scale={[1.08, 1, 1]}
+          bevelSegments={4}
+          scale={[config.scaleX, 1, 1]}
           castShadow
           receiveShadow
         >
@@ -1672,19 +1746,19 @@ function TextBlock({ powerState, introProgress }) {
         </Text3D>
       </group>
 
-      <group position={[positions.buildsX, lineY2, 0]}>
+      <group position={[positions.buildsX, config.lineY2, 0]}>
         <Text3D
           ref={buildsRef}
           font={FONT_URL}
-          size={1.02}
-          height={0.45}
+          size={config.mediumSize}
+          height={config.mediumHeight}
           curveSegments={10}
           bevelEnabled
-          bevelThickness={0.02}
-          bevelSize={0.017}
+          bevelThickness={config.mediumBevelThickness}
+          bevelSize={config.mediumBevelSize}
           bevelOffset={0}
-          bevelSegments={5}
-          scale={[1.08, 1, 1]}
+          bevelSegments={4}
+          scale={[config.scaleX, 1, 1]}
           castShadow
           receiveShadow
         >
@@ -1698,19 +1772,19 @@ function TextBlock({ powerState, introProgress }) {
         </Text3D>
       </group>
 
-      <group position={[positions.digitalX, lineY2, 0]}>
+      <group position={[positions.digitalX, config.lineY2, 0]}>
         <Text3D
           ref={digitalRef}
           font={FONT_URL}
-          size={1.02}
-          height={0.45}
+          size={config.mediumSize}
+          height={config.mediumHeight}
           curveSegments={10}
           bevelEnabled
-          bevelThickness={0.02}
-          bevelSize={0.017}
+          bevelThickness={config.mediumBevelThickness}
+          bevelSize={config.mediumBevelSize}
           bevelOffset={0}
-          bevelSegments={5}
-          scale={[1.08, 1, 1]}
+          bevelSegments={4}
+          scale={[config.scaleX, 1, 1]}
           castShadow
           receiveShadow
         >
@@ -1728,19 +1802,19 @@ function TextBlock({ powerState, introProgress }) {
         </Text3D>
       </group>
 
-      <group position={[positions.expX, lineY3, 0]}>
+      <group position={[positions.expX, config.lineY3, 0]}>
         <Text3D
           ref={expRef}
           font={FONT_URL}
-          size={1.18}
-          height={0.51}
+          size={config.largeSize}
+          height={config.largeHeight}
           curveSegments={10}
           bevelEnabled
-          bevelThickness={0.022}
-          bevelSize={0.02}
+          bevelThickness={config.largeBevelThickness}
+          bevelSize={config.largeBevelSize}
           bevelOffset={0}
-          bevelSegments={5}
-          scale={[1.08, 1, 1]}
+          bevelSegments={4}
+          scale={[config.scaleX, 1, 1]}
           castShadow
           receiveShadow
         >
@@ -1960,14 +2034,14 @@ function Scene({ powerState, pointer, introProgress, showArrow, viewportMode }) 
       <Floor />
       <SoftBeamWall pointer={pointer} powerState={powerState} />
       <SoftBeamFloor pointer={pointer} powerState={powerState} />
-      <NeonArrowSign visible={showArrow} />
-      <WallLamp />
+      <NeonArrowSign visible={showArrow} viewportMode={viewportMode} />
+      <WallLamp viewportMode={viewportMode} />
       <PowerLights
         powerState={powerState}
         pointer={pointer}
         showArrow={showArrow}
       />
-      <TextBlock powerState={powerState} introProgress={introProgress} />
+      <TextBlock powerState={powerState} introProgress={introProgress} viewportMode={viewportMode} />
     </>
   );
 }
