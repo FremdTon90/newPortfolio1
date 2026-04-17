@@ -109,7 +109,7 @@ class HeroCanvasErrorBoundary extends React.Component {
 }
 
 /* -----------------------------
-   Texture helpers
+   Textures
 ----------------------------- */
 
 function createColorTextureFromCanvas(canvas) {
@@ -617,17 +617,17 @@ function SideWalls({ powerState }) {
         receiveShadow
         castShadow
       >
-        <planeGeometry args={[18.6, 18, 90, 80]} />
+        <planeGeometry args={[18.6, 18, 72, 64]} />
         <meshStandardMaterial
           ref={leftRef}
           map={leftTextures.colorMap}
           bumpMap={leftTextures.bumpMap}
           bumpScale={0.03}
           displacementMap={leftTextures.displacementMap}
-          displacementScale={0.1}
-          displacementBias={-0.045}
+          displacementScale={0.075}
+          displacementBias={-0.035}
           normalMap={leftTextures.normalMap}
-          normalScale={new THREE.Vector2(0.3, 0.3)}
+          normalScale={new THREE.Vector2(0.22, 0.22)}
           roughnessMap={leftTextures.roughnessMap}
           color="#efc7b3"
           roughness={0.84}
@@ -1539,7 +1539,7 @@ function WallLamp() {
         shadow-mapSize-height={512}
         shadow-bias={-0.00004}
         shadow-normalBias={0.02}
-        shadow-radius={34}
+        shadow-radius={8}
       />
 
       <pointLight
@@ -1613,9 +1613,7 @@ function getCachedTextBlockLayout(buildsRef, digitalRef, wordGap, globalOffsetX)
   return textBlockLayoutCache;
 }
 
-function TextBlock({ powerState, introProgress, pointer }) {
-  const rootRef = useRef(null);
-
+function TextBlock({ powerState, pointer }) {
   const dustinRef = useRef(null);
   const buildsRef = useRef(null);
   const digitalRef = useRef(null);
@@ -1689,16 +1687,6 @@ function TextBlock({ powerState, introProgress, pointer }) {
   }, []);
 
   useFrame((_, delta) => {
-    if (!rootRef.current) return;
-
-    const introYOffset = THREE.MathUtils.lerp(0.65, 0, introProgress);
-    rootRef.current.position.y = THREE.MathUtils.damp(
-      rootRef.current.position.y,
-      introYOffset,
-      10,
-      delta
-    );
-
     if (digitalOverlayRef.current?.material) {
       const spotCenterX = -0.22;
       const spotCenterY = 0.03;
@@ -1710,10 +1698,10 @@ function TextBlock({ powerState, introProgress, pointer }) {
       const lampOnDigital =
         powerState === "lamp"
           ? THREE.MathUtils.clamp(
-            1 - THREE.MathUtils.smoothstep(dist, 0.08, 0.62),
-            0,
-            1
-          )
+              1 - THREE.MathUtils.smoothstep(dist, 0.08, 0.62),
+              0,
+              1
+            )
           : 0;
 
       const targetOpacity = 1 - lampOnDigital;
@@ -1728,7 +1716,7 @@ function TextBlock({ powerState, introProgress, pointer }) {
   });
 
   return (
-    <group ref={rootRef} position={[0, 0.12, -1.05]} visible={layoutReady}>
+    <group position={[0, 0.12, -1.05]} visible={layoutReady}>
       <group position={[positions.dustinX, lineY1, 0]}>
         <Text3D
           ref={dustinRef}
@@ -2012,12 +2000,12 @@ function PowerLights({ powerState, pointer, showArrow, arrowFlickerLevelRef }) {
     spotRef.current.intensity = 980;
     spotRef.current.angle = 0.28;
     spotRef.current.penumbra = 1;
-    spotRef.current.distance = 98;
+    spotRef.current.distance = 72;
     spotRef.current.decay = 1.15;
 
-    spotRef.current.shadow.camera.near = 6;
-    spotRef.current.shadow.camera.far = 42;
-    spotRef.current.shadow.focus = 1;
+    spotRef.current.shadow.camera.near = 8;
+    spotRef.current.shadow.camera.far = 32;
+    spotRef.current.shadow.focus = 0.9;
     spotRef.current.shadow.bias = -0.00012;
     spotRef.current.shadow.normalBias = 0.02;
     spotRef.current.shadow.radius = 3.2;
@@ -2025,10 +2013,10 @@ function PowerLights({ powerState, pointer, showArrow, arrowFlickerLevelRef }) {
     const last = lastShadowSampleRef.current;
     const movedEnough =
       last.lampX === null ||
-      Math.abs(spotRef.current.position.x - last.lampX) > 0.015 ||
-      Math.abs(spotRef.current.position.y - last.lampY) > 0.015 ||
-      Math.abs(spotTarget.position.x - last.targetX) > 0.03 ||
-      Math.abs(spotTarget.position.y - last.targetY) > 0.03;
+      Math.abs(spotRef.current.position.x - last.lampX) > 0.018 ||
+      Math.abs(spotRef.current.position.y - last.lampY) > 0.018 ||
+      Math.abs(spotTarget.position.x - last.targetX) > 0.035 ||
+      Math.abs(spotTarget.position.y - last.targetY) > 0.035;
 
     const powerChanged = last.powerState !== powerState;
     const needsForcedUpdate = last.dirtyFrames > 0;
@@ -2161,7 +2149,6 @@ function Scene({
       />
       <TextBlock
         powerState={powerState}
-        introProgress={introProgress}
         pointer={pointer}
       />
     </>
