@@ -7,7 +7,7 @@ import React, {
   useLayoutEffect,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Text3D, useGLTF, useTexture } from "@react-three/drei";
+import { Text3D, useGLTF, useTexture, Preload, useFont } from "@react-three/drei";
 import * as THREE from "three";
 import bricksWallTexture from "../../assets/images/textures/bricks.png";
 import checkerFloorDiffuse from "../../assets/images/textures/checker_floor_diffuse.png";
@@ -58,6 +58,22 @@ const WALL_LAMP_CONFIG = {
   showLightHelper: false,
   helperSize: 0.02,
 };
+
+let brickDerivedTextureCache = new WeakMap();
+let softBeamTextureCache = null;
+let glowTextureCache = null;
+let textBlockLayoutCache = null;
+
+function getBrickTextureCache(image) {
+  if (!image) return null;
+
+  const cached = brickDerivedTextureCache.get(image);
+  if (cached) return cached;
+
+  const created = createBrickDetailTexturesFromImage(image);
+  brickDerivedTextureCache.set(image, created);
+  return created;
+}
 
 class HeroCanvasErrorBoundary extends React.Component {
   constructor(props) {
@@ -178,8 +194,8 @@ function createNormalMapFromHeightCanvas(heightCanvas, strength = 2.2) {
   const out = srcCtx.createImageData(width, height);
 
   const get = (x, y) => {
-    const ix = Math.max(0, Math.min(width - 1, x));
-    const iy = Math.max(0, Math.min(height - 1, y));
+    const ix = (x + width) % width;
+    const iy = (y + height) % height;
     const i = (iy * width + ix) * 4;
     return src.data[i] / 255;
   };
@@ -216,189 +232,120 @@ function createNormalMapFromHeightCanvas(heightCanvas, strength = 2.2) {
   return createDataTextureFromCanvas(canvas);
 }
 
-/* -----------------------------
-   Procedural textures
------------------------------ */
+function createBrickDetailTexturesFromImage(image) {
+  const width = image.naturalWidth || image.width || 2048;
+  const height = image.naturalHeight || image.height || 1024;
 
-function createBrickTextures() {
-  const width = 2048;
-  const height = 1024;
+  const sourceCanvas = document.createElement("canvas");
+  sourceCanvas.width = width;
+  sourceCanvas.height = height;
+  const sctx = sourceCanvas.getContext("2d");
+  sctx.drawImage(image, 0, 0, width, height);
 
-  const colorCanvas = document.createElement("canvas");
-  colorCanvas.width = width;
-  colorCanvas.height = height;
-  const ctx = colorCanvas.getContext("2d");
+  const sourceData = sctx.getImageData(0, 0, width, height);
+  const src = sourceData.data;
 
   const heightCanvas = document.createElement("canvas");
   heightCanvas.width = width;
   heightCanvas.height = height;
-  const htx = heightCanvas.getContext("2d");
+  const hctx = heightCanvas.getContext("2d");
+  const heightData = hctx.createImageData(width, height);
 
   const roughCanvas = document.createElement("canvas");
   roughCanvas.width = width;
   roughCanvas.height = height;
-  const rtx = roughCanvas.getContext("2d");
+  const rctx = roughCanvas.getContext("2d");
+  const roughData = rctx.createImageData(width, height);
 
-  const mortarColor = "#180c0c";
+  const getLum = (x, y) => {
+    const ix = ((x % width) + width) % width;
+    const iy = ((y % height) + height) % height;
+    const i = (iy * width + ix) * 4;
+    const r = src[i] / 255;
+    const g = src[i + 1] / 255;
+    const b = src[i + 2] / 255;
+    return 0.299 * r + 0.587 * g + 0.114 * b;
+  };
 
-  ctx.fillStyle = mortarColor;
-  ctx.fillRect(0, 0, width, height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = (y * width + x) * 4;
 
-  htx.fillStyle = "#5d5d5d";
-  htx.fillRect(0, 0, width, height);
+      const r = src[i] / 255;
+      const g = src[i + 1] / 255;
+      const b = src[i + 2] / 255;
 
-  rtx.fillStyle = "#dfdfdf";
-  rtx.fillRect(0, 0, width, height);
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const maxC = Math.max(r, g, b);
+      const minC = Math.min(r, g, b);
+      const saturation = maxC - minC;
 
-  const brickW = 128;
-  const brickH = 52;
-  const mortar = 8;
-  const rowStep = brickH + mortar;
+      const l = getLum(x - 1, y);
+      const rr = getLum(x + 1, y);
+      const u = getLum(x, y - 1);
+      const d = getLum(x, y + 1);
 
-  for (let row = 0, y = 0; y < height + brickH; row += 1, y += rowStep) {
-    const offset = row % 2 === 1 ? brickW / 2 : 0;
-
-    for (let x = -brickW; x < width + brickW; x += brickW + mortar) {
-      const px = x + offset;
-      const py = y;
-
-      const hue = 7 + Math.random() * 7;
-      const sat = 22 + Math.random() * 16;
-      const light = 18 + Math.random() * 9;
-
-      const grad = ctx.createLinearGradient(px, py, px, py + brickH);
-      grad.addColorStop(0, `hsl(${hue} ${sat}% ${light + 3}%)`);
-      grad.addColorStop(0.5, `hsl(${hue + (Math.random() * 1.5 - 0.75)} ${sat}% ${light}%)`);
-      grad.addColorStop(1, `hsl(${hue + 1} ${Math.max(12, sat - 2)}% ${Math.max(8, light - 4)}%)`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(px, py, brickW, brickH);
-
-      const broadShade = ctx.createRadialGradient(
-        px + brickW * 0.5,
-        py + brickH * 0.5,
-        brickW * 0.08,
-        px + brickW * 0.5,
-        py + brickH * 0.5,
-        brickW * 0.75
+      const edge = Math.min(
+        1,
+        Math.abs(l - rr) * 2.8 + Math.abs(u - d) * 2.8
       );
-      broadShade.addColorStop(0, "rgba(0,0,0,0)");
-      broadShade.addColorStop(1, "rgba(0,0,0,0.10)");
-      ctx.fillStyle = broadShade;
-      ctx.fillRect(px, py, brickW, brickH);
 
-      ctx.fillStyle = "rgba(255,235,230,0.04)";
-      ctx.fillRect(px + 1, py + 1, brickW - 2, 2);
+      // Hellere, wärmere Bereiche = Brick
+      // Dunklere / neutralere Linien = Fugen
+      const mortarMask = THREE.MathUtils.clamp((0.50 - lum) * 3.6, 0, 1);
+      const brickMask = 1 - mortarMask;
 
-      ctx.fillStyle = "rgba(0,0,0,0.16)";
-      ctx.fillRect(px, py + brickH - 3, brickW, 3);
+      // Mikrostruktur in den Steinen
+      const micro =
+        THREE.MathUtils.clamp((lum - 0.16) * 0.38, 0, 0.22) +
+        saturation * 0.10 +
+        edge * 0.10;
 
-      for (let i = 0; i < 5; i += 1) {
-        drawSoftBlob(
-          ctx,
-          px + 12 + Math.random() * (brickW - 24),
-          py + 10 + Math.random() * (brickH - 20),
-          8 + Math.random() * 18,
-          5 + Math.random() * 10,
-          [
-            [0, `rgba(255,220,210,${0.018 + Math.random() * 0.018})`],
-            [1, "rgba(255,220,210,0)"],
-          ]
-        );
-      }
+      // Fugen deutlich tiefer machen
+      const heightValue = THREE.MathUtils.clamp(
+        0.46 + brickMask * 0.24 - mortarMask * 0.34 + micro,
+        0,
+        1
+      );
 
-      for (let i = 0; i < 4; i += 1) {
-        drawSoftBlob(
-          ctx,
-          px + 12 + Math.random() * (brickW - 24),
-          py + 10 + Math.random() * (brickH - 20),
-          8 + Math.random() * 18,
-          5 + Math.random() * 10,
-          [
-            [0, `rgba(0,0,0,${0.018 + Math.random() * 0.02})`],
-            [1, "rgba(0,0,0,0)"],
-          ]
-        );
-      }
+      // Fugen rauer, Brick etwas glatter
+      const roughValue = THREE.MathUtils.clamp(
+        0.76 + mortarMask * 0.16 + edge * 0.06 - brickMask * 0.08 - saturation * 0.05,
+        0,
+        1
+      );
 
-      for (let i = 0; i < 18; i += 1) {
-        const nx = px + Math.random() * brickW;
-        const ny = py + Math.random() * brickH;
-        ctx.fillStyle = `rgba(255,240,235,${0.01 + Math.random() * 0.018})`;
-        ctx.fillRect(nx, ny, 1.5, 1.5);
-      }
+      const hv = Math.round(heightValue * 255);
+      const rv = Math.round(roughValue * 255);
 
-      htx.fillStyle = "#cbcbcb";
-      htx.fillRect(px, py, brickW, brickH);
+      heightData.data[i] = hv;
+      heightData.data[i + 1] = hv;
+      heightData.data[i + 2] = hv;
+      heightData.data[i + 3] = 255;
 
-      htx.fillStyle = "#dadada";
-      htx.fillRect(px + 1, py + 1, brickW - 2, 2);
-
-      htx.fillStyle = "#afafaf";
-      htx.fillRect(px, py + brickH - 3, brickW, 3);
-
-      for (let i = 0; i < 4; i += 1) {
-        drawSoftBlob(
-          htx,
-          px + 12 + Math.random() * (brickW - 24),
-          py + 10 + Math.random() * (brickH - 20),
-          6 + Math.random() * 12,
-          4 + Math.random() * 8,
-          [
-            [0, `rgba(220,220,220,${0.10 + Math.random() * 0.08})`],
-            [1, "rgba(220,220,220,0)"],
-          ]
-        );
-      }
-
-      const roughBase = 160 + Math.floor(Math.random() * 18);
-      rtx.fillStyle = `rgb(${roughBase},${roughBase},${roughBase})`;
-      rtx.fillRect(px, py, brickW, brickH);
-
-      for (let i = 0; i < 4; i += 1) {
-        const value = 138 + Math.floor(Math.random() * 24);
-        drawSoftBlob(
-          rtx,
-          px + 12 + Math.random() * (brickW - 24),
-          py + 10 + Math.random() * (brickH - 20),
-          8 + Math.random() * 20,
-          5 + Math.random() * 10,
-          [
-            [0, `rgba(${value},${value},${value},0.32)`],
-            [1, `rgba(${value},${value},${value},0)`],
-          ]
-        );
-      }
+      roughData.data[i] = rv;
+      roughData.data[i + 1] = rv;
+      roughData.data[i + 2] = rv;
+      roughData.data[i + 3] = 255;
     }
   }
 
-  for (let y = brickH; y < height; y += rowStep) {
-    htx.fillStyle = "#666666";
-    htx.fillRect(0, y, width, mortar);
+  hctx.putImageData(heightData, 0, 0);
+  rctx.putImageData(roughData, 0, 0);
 
-    rtx.fillStyle = "#eeeeee";
-    rtx.fillRect(0, y, width, mortar);
-  }
-
-  addSpeckleNoise(ctx, width, height, 2200, 0.004, 0.014, false);
-  addSpeckleNoise(ctx, width, height, 1800, 0.004, 0.012, true);
-
-  addSpeckleNoise(rtx, width, height, 1600, 0.012, 0.032, true);
-
-  const colorMap = createColorTextureFromCanvas(colorCanvas);
-  const bumpMap = createDataTextureFromCanvas(heightCanvas);
-  const roughnessMap = createDataTextureFromCanvas(roughCanvas);
-  const normalMap = createNormalMapFromHeightCanvas(heightCanvas, 2.7);
+  const displacementMap = createDataTextureFromCanvas(heightCanvas);
 
   return {
-    colorMap,
-    bumpMap,
-    roughnessMap,
-    normalMap,
-    mortarColor,
+    bumpMap: createDataTextureFromCanvas(heightCanvas),
+    displacementMap,
+    roughnessMap: createDataTextureFromCanvas(roughCanvas),
+    normalMap: createNormalMapFromHeightCanvas(heightCanvas, 3.0),
   };
 }
 
 function createSoftBeamTexture() {
+  if (softBeamTextureCache) return softBeamTextureCache;
+
   const size = 1024;
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -430,10 +377,14 @@ function createSoftBeamTexture() {
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.needsUpdate = true;
+
+  softBeamTextureCache = tex;
   return tex;
 }
 
 function createGlowTexture() {
+  if (glowTextureCache) return glowTextureCache;
+
   const size = 1024;
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -464,23 +415,39 @@ function createGlowTexture() {
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.needsUpdate = true;
+
+  glowTextureCache = tex;
   return tex;
 }
 
-/* -----------------------------
-   Geladene Wandtextur + prozedurale Detailmaps
------------------------------ */
-
 function useWallBrickTextures(repeatX = 1, repeatY = 1) {
   const wallColorTexture = useTexture(BRICKS_WALL_URL);
-  const detailTextures = useMemo(() => createBrickTextures(), []);
+
+  const detailTextures = useMemo(() => {
+    const image = wallColorTexture?.image;
+    if (!image) return null;
+    return getBrickTextureCache(image);
+  }, [wallColorTexture]);
 
   return useMemo(() => {
+    if (!wallColorTexture || !detailTextures) {
+      return {
+        colorMap: null,
+        bumpMap: null,
+        displacementMap: null,
+        roughnessMap: null,
+        normalMap: null,
+      };
+    }
+
     const setupTexture = (source, isColor = false) => {
       const tex = source.clone();
       tex.wrapS = THREE.RepeatWrapping;
       tex.wrapT = THREE.RepeatWrapping;
       tex.repeat.set(repeatX, repeatY);
+      tex.offset.set(0, 0);
+      tex.center.set(0, 0);
+      tex.rotation = 0;
       tex.anisotropy = 8;
       tex.magFilter = THREE.LinearFilter;
       tex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -491,9 +458,10 @@ function useWallBrickTextures(repeatX = 1, repeatY = 1) {
 
     return {
       colorMap: setupTexture(wallColorTexture, true),
-      bumpMap: setupTexture(detailTextures.bumpMap),
-      roughnessMap: setupTexture(detailTextures.roughnessMap),
-      normalMap: setupTexture(detailTextures.normalMap),
+      bumpMap: setupTexture(detailTextures.bumpMap, false),
+      displacementMap: setupTexture(detailTextures.displacementMap, false),
+      roughnessMap: setupTexture(detailTextures.roughnessMap, false),
+      normalMap: setupTexture(detailTextures.normalMap, false),
     };
   }, [wallColorTexture, detailTextures, repeatX, repeatY]);
 }
@@ -535,42 +503,47 @@ function BrickMaterial({
   powerState,
   textures,
   materialRef,
-  color = "#ffffff",
+  color = "#f0d2c2",
   emissive = "#2a0f10",
 }) {
-  useFrame((state) => {
+  useEffect(() => {
     if (!materialRef.current) return;
 
-    const t = state.clock.getElapsedTime();
     let emissiveIntensity = 0.08;
-
     if (powerState === "intro") emissiveIntensity = 0.11;
+    if (powerState === "lamp") emissiveIntensity = 0.02;
 
-    if (powerState === "flicker") {
-      emissiveIntensity =
-        Math.sin(t * 34) > 0.35
-          ? 0.1
-          : Math.sin(t * 18) > -0.1
-            ? 0.045
-            : 0.018;
+    if (powerState !== "flicker") {
+      materialRef.current.emissiveIntensity = emissiveIntensity;
     }
+  }, [powerState, materialRef]);
 
-    if (powerState === "lamp") emissiveIntensity = 0.025;
+  useFrame((state) => {
+    if (!materialRef.current || powerState !== "flicker") return;
 
-    materialRef.current.emissiveIntensity = emissiveIntensity;
+    const t = state.clock.getElapsedTime();
+    materialRef.current.emissiveIntensity =
+      Math.sin(t * 34) > 0.35
+        ? 0.1
+        : Math.sin(t * 18) > -0.1
+          ? 0.045
+          : 0.018;
   });
 
   return (
     <meshStandardMaterial
       ref={materialRef}
-      map={textures.colorMap}
-      bumpMap={textures.bumpMap}
-      bumpScale={0.018}
-      normalMap={textures.normalMap}
-      normalScale={new THREE.Vector2(0.16, 0.16)}
-      roughnessMap={textures.roughnessMap}
+      map={textures?.colorMap || null}
+      bumpMap={textures?.bumpMap || null}
+      bumpScale={0.03}
+      displacementMap={textures?.displacementMap || null}
+      displacementScale={0.12}
+      displacementBias={-0.055}
+      normalMap={textures?.normalMap || null}
+      normalScale={new THREE.Vector2(0.32, 0.32)}
+      roughnessMap={textures?.roughnessMap || null}
       color={color}
-      roughness={0.88}
+      roughness={0.82}
       metalness={0}
       emissive={emissive}
       emissiveIntensity={0.08}
@@ -580,16 +553,16 @@ function BrickMaterial({
 
 function BackWall({ powerState }) {
   const wallMaterialRef = useRef(null);
-  const textures = useWallBrickTextures(2.89, 1.42);
+  const textures = useWallBrickTextures(3.85, 1.89);
 
   return (
-    <mesh position={[0, 0.15, -12.8]} receiveShadow>
-      <planeGeometry args={[34, 18, 1, 1]} />
+    <mesh position={[0, 0.15, -12.8]} receiveShadow castShadow>
+      <planeGeometry args={[34, 18, 220, 120]} />
       <BrickMaterial
         powerState={powerState}
         textures={textures}
         materialRef={wallMaterialRef}
-        color="#ffffff"
+        color="#efc9b5"
         emissive="#241011"
       />
     </mesh>
@@ -600,29 +573,38 @@ function SideWalls({ powerState }) {
   const leftRef = useRef(null);
   const rightRef = useRef(null);
 
-  const leftTextures = useWallBrickTextures(1.51, 1.42);
-  const rightTextures = useWallBrickTextures(1.51, 1.42);
+  const leftTextures = useWallBrickTextures(2.01, 1.89);
+  const rightTextures = useWallBrickTextures(2.01, 1.89);
 
-  useFrame((state) => {
+  useEffect(() => {
     const refs = [leftRef.current, rightRef.current].filter(Boolean);
-    const t = state.clock.getElapsedTime();
+    if (!refs.length || powerState === "flicker") return;
+
+    let emissiveIntensity = 0.04;
+    if (powerState === "intro") emissiveIntensity = 0.06;
+    if (powerState === "lamp") emissiveIntensity = 0.016;
 
     refs.forEach((mat) => {
-      let emissiveIntensity = 0.04;
+      mat.emissiveIntensity = emissiveIntensity;
+    });
+  }, [powerState]);
 
-      if (powerState === "intro") emissiveIntensity = 0.06;
+  useFrame((state) => {
+    if (powerState !== "flicker") return;
 
-      if (powerState === "flicker") {
-        emissiveIntensity =
-          Math.sin(t * 28) > 0.3
-            ? 0.06
-            : Math.sin(t * 16) > -0.05
-              ? 0.028
-              : 0.01;
-      }
+    const refs = [leftRef.current, rightRef.current].filter(Boolean);
+    if (!refs.length) return;
 
-      if (powerState === "lamp") emissiveIntensity = 0.018;
+    const t = state.clock.getElapsedTime();
 
+    const emissiveIntensity =
+      Math.sin(t * 28) > 0.3
+        ? 0.06
+        : Math.sin(t * 16) > -0.05
+          ? 0.028
+          : 0.01;
+
+    refs.forEach((mat) => {
       mat.emissiveIntensity = emissiveIntensity;
     });
   });
@@ -633,18 +615,22 @@ function SideWalls({ powerState }) {
         position={[-17, 0.15, -4.6]}
         rotation={[0, Math.PI / 2, 0]}
         receiveShadow
+        castShadow
       >
-        <planeGeometry args={[18.6, 18, 1, 1]} />
+        <planeGeometry args={[18.6, 18, 140, 120]} />
         <meshStandardMaterial
           ref={leftRef}
           map={leftTextures.colorMap}
           bumpMap={leftTextures.bumpMap}
-          bumpScale={0.018}
+          bumpScale={0.03}
+          displacementMap={leftTextures.displacementMap}
+          displacementScale={0.1}
+          displacementBias={-0.045}
           normalMap={leftTextures.normalMap}
-          normalScale={new THREE.Vector2(0.16, 0.16)}
+          normalScale={new THREE.Vector2(0.3, 0.3)}
           roughnessMap={leftTextures.roughnessMap}
-          color="#ffffff"
-          roughness={0.96}
+          color="#efc7b3"
+          roughness={0.84}
           metalness={0}
           emissive="#241011"
           emissiveIntensity={0.04}
@@ -656,18 +642,22 @@ function SideWalls({ powerState }) {
         position={[17, 0.15, -4.6]}
         rotation={[0, -Math.PI / 2, 0]}
         receiveShadow
+        castShadow
       >
-        <planeGeometry args={[18.6, 18, 1, 1]} />
+        <planeGeometry args={[18.6, 18, 140, 120]} />
         <meshStandardMaterial
           ref={rightRef}
           map={rightTextures.colorMap}
           bumpMap={rightTextures.bumpMap}
-          bumpScale={0.018}
+          bumpScale={0.03}
+          displacementMap={rightTextures.displacementMap}
+          displacementScale={0.1}
+          displacementBias={-0.045}
           normalMap={rightTextures.normalMap}
-          normalScale={new THREE.Vector2(0.16, 0.16)}
+          normalScale={new THREE.Vector2(0.3, 0.3)}
           roughnessMap={rightTextures.roughnessMap}
-          color="#ffffff"
-          roughness={0.96}
+          color="#efc7b3"
+          roughness={0.84}
           metalness={0}
           emissive="#241011"
           emissiveIntensity={0.04}
@@ -810,11 +800,11 @@ function SoftBeamFloor({ pointer, powerState }) {
 function createHorrorNeonFlickerController() {
   return {
     mode: "burst-off",
-    timer: 0.035,
+    timer: 0.016,
     burstRemaining: 4,
-    currentLevel: 0.18,
-    targetLevel: 0.02,
-    hardDropChance: 0.12,
+    currentLevel: 0.0,
+    targetLevel: 0.0,
+    hardDropChance: 0.1,
   };
 }
 
@@ -834,9 +824,9 @@ function updateHorrorNeonFlicker(controller, delta, visible) {
     switch (controller.mode) {
       case "off":
         controller.mode = "burst-off";
-        controller.burstRemaining = 3 + Math.floor(Math.random() * 3); // 3 - 5
-        controller.targetLevel = 0.02 + Math.random() * 0.03;
-        controller.timer = 0.02 + Math.random() * 0.03; // 20ms - 50ms
+        controller.burstRemaining = 5 + Math.floor(Math.random() * 3);
+        controller.targetLevel = 0.0;
+        controller.timer = 0.003 + Math.random() * 0.006;
         break;
 
       case "stable": {
@@ -844,33 +834,33 @@ function updateHorrorNeonFlicker(controller, delta, visible) {
 
         if (shouldHardDrop) {
           controller.mode = "hard-off";
-          controller.targetLevel = 0.015 + Math.random() * 0.025;
-          controller.timer = 0.05 + Math.random() * 0.08; // 50ms - 130ms
+          controller.targetLevel = 0.0;
+          controller.timer = 0.008 + Math.random() * 0.014;
         } else {
           controller.mode = "burst-off";
-          controller.burstRemaining = 3 + Math.floor(Math.random() * 3); // 3 - 5
-          controller.targetLevel = Math.random() < 0.84 ? 0.02 : 0.12;
-          controller.timer = 0.018 + Math.random() * 0.03; // 18ms - 48ms
+          controller.burstRemaining = 5 + Math.floor(Math.random() * 3);
+          controller.targetLevel = 0.0;
+          controller.timer = 0.003 + Math.random() * 0.006;
         }
         break;
       }
 
       case "hard-off":
         controller.mode = "reignite";
-        controller.targetLevel = 0.55 + Math.random() * 0.2; // 0.55 - 0.75
-        controller.timer = 0.03 + Math.random() * 0.045; // 30ms - 75ms
+        controller.targetLevel = 0.9 + Math.random() * 0.1;
+        controller.timer = 0.004 + Math.random() * 0.008;
         break;
 
       case "reignite":
         controller.mode = "stable";
-        controller.targetLevel = 0.95 + Math.random() * 0.05; // 0.95 - 1.00
-        controller.timer = 1.8 + Math.random() * 2.8; // 1.8s - 4.6s
+        controller.targetLevel = 1.0;
+        controller.timer = 1.2 + Math.random() * 2.0;
         break;
 
       case "burst-off":
         controller.mode = "burst-on";
-        controller.targetLevel = 0.48 + Math.random() * 0.42; // 0.48 - 0.90
-        controller.timer = 0.022 + Math.random() * 0.04; // 22ms - 62ms
+        controller.targetLevel = 0.86 + Math.random() * 0.14;
+        controller.timer = 0.002 + Math.random() * 0.005;
         break;
 
       case "burst-on":
@@ -878,45 +868,37 @@ function updateHorrorNeonFlicker(controller, delta, visible) {
 
         if (controller.burstRemaining > 0) {
           controller.mode = "burst-off";
-          controller.targetLevel = Math.random() < 0.86 ? 0.02 : 0.1;
-          controller.timer = 0.016 + Math.random() * 0.035; // 16ms - 51ms
+          controller.targetLevel = 0.0;
+          controller.timer = 0.002 + Math.random() * 0.005;
         } else {
-          const shakyRecovery = Math.random() < 0.38;
+          const shakyRecovery = Math.random() < 0.32;
 
           if (shakyRecovery) {
             controller.mode = "reignite";
-            controller.targetLevel = 0.62 + Math.random() * 0.14;
-            controller.timer = 0.028 + Math.random() * 0.04; // 28ms - 68ms
+            controller.targetLevel = 0.9 + Math.random() * 0.08;
+            controller.timer = 0.004 + Math.random() * 0.008;
           } else {
             controller.mode = "stable";
-            controller.targetLevel = 0.96 + Math.random() * 0.04;
-            controller.timer = 2.0 + Math.random() * 3.4; // 2.0s - 5.4s
+            controller.targetLevel = 1.0;
+            controller.timer = 1.4 + Math.random() * 2.4;
           }
         }
         break;
 
       default:
         controller.mode = "stable";
-        controller.targetLevel = 1;
-        controller.timer = 2.2 + Math.random() * 2.6;
+        controller.targetLevel = 1.0;
+        controller.timer = 1.5 + Math.random() * 2.0;
         break;
     }
+
+    controller.currentLevel = controller.targetLevel;
   }
-
-  const dampSpeed =
-    controller.targetLevel < controller.currentLevel ? 42 : 24;
-
-  controller.currentLevel = THREE.MathUtils.damp(
-    controller.currentLevel,
-    controller.targetLevel,
-    dampSpeed,
-    delta
-  );
 
   return controller.currentLevel;
 }
 
-function NeonArrowSign({ visible }) {
+function NeonArrowSign({ visible, arrowFlickerLevelRef }) {
   const rootRef = useRef(null);
   const signRef = useRef(null);
   const wallGlowRef = useRef(null);
@@ -1036,10 +1018,13 @@ function NeonArrowSign({ visible }) {
       visible
     );
 
-    // Minimales Micro-Jitter, damit es nicht digital-perfekt aussieht
+    if (arrowFlickerLevelRef) {
+      arrowFlickerLevelRef.current = flickerLevel;
+    }
+
     const microJitter =
-      visible && flickerLevel > 0.75
-        ? 0.97 + Math.sin(t * 19.7) * 0.015 + Math.sin(t * 33.1) * 0.01
+      visible && flickerLevel > 0.9
+        ? 0.985 + Math.sin(t * 19.7) * 0.01 + Math.sin(t * 33.1) * 0.006
         : 1;
 
     const finalLevel = flickerLevel * microJitter;
@@ -1082,12 +1067,7 @@ function NeonArrowSign({ visible }) {
           if (!mat) return;
 
           if ("opacity" in mat) {
-            mat.opacity = THREE.MathUtils.damp(
-              mat.opacity ?? 0,
-              visible ? 1 : 0,
-              8,
-              delta
-            );
+            mat.opacity = visible ? 1 : 0;
           }
 
           if ("emissiveIntensity" in mat && mat.emissive) {
@@ -1095,100 +1075,50 @@ function NeonArrowSign({ visible }) {
               mat.emissive.r > mat.emissive.g * 1.08 &&
               mat.emissive.r > mat.emissive.b * 1.08;
 
-            const baseTarget = isRedish
-              ? 12.8 * finalLevel
-              : 0.18 + 0.27 * finalLevel;
-
-            mat.emissiveIntensity = THREE.MathUtils.damp(
-              mat.emissiveIntensity ?? 0,
-              visible ? baseTarget : 0,
-              14,
-              delta
-            );
+            mat.emissiveIntensity = visible
+              ? isRedish
+                ? 12.8 * finalLevel
+                : 0.18 + 0.27 * finalLevel
+              : 0;
           }
         });
       });
     }
 
     if (wallGlowRef.current?.material) {
-      wallGlowRef.current.material.opacity = THREE.MathUtils.damp(
-        wallGlowRef.current.material.opacity,
-        visible ? 0.62 * finalLevel : 0,
-        14,
-        delta
-      );
+      wallGlowRef.current.material.opacity = visible ? 0.62 * finalLevel : 0;
     }
 
     if (wallGlowOuterRef.current?.material) {
-      wallGlowOuterRef.current.material.opacity = THREE.MathUtils.damp(
-        wallGlowOuterRef.current.material.opacity,
-        visible ? 0.28 * finalLevel : 0,
-        14,
-        delta
-      );
+      wallGlowOuterRef.current.material.opacity = visible ? 0.28 * finalLevel : 0;
     }
 
     if (floorGlowRef.current?.material) {
-      floorGlowRef.current.material.opacity = THREE.MathUtils.damp(
-        floorGlowRef.current.material.opacity,
-        visible ? 0.22 * finalLevel : 0,
-        14,
-        delta
-      );
+      floorGlowRef.current.material.opacity = visible ? 0.22 * finalLevel : 0;
     }
 
     if (redWallLightRef.current) {
-      redWallLightRef.current.intensity = THREE.MathUtils.damp(
-        redWallLightRef.current.intensity,
-        visible ? 8.8 * finalLevel : 0,
-        14,
-        delta
-      );
+      redWallLightRef.current.intensity = visible ? 8.8 * finalLevel : 0;
     }
 
     if (redFloorLightRef.current) {
-      redFloorLightRef.current.intensity = THREE.MathUtils.damp(
-        redFloorLightRef.current.intensity,
-        visible ? 6.6 * finalLevel : 0,
-        14,
-        delta
-      );
+      redFloorLightRef.current.intensity = visible ? 6.6 * finalLevel : 0;
     }
 
     if (redFrontLightRef.current) {
-      redFrontLightRef.current.intensity = THREE.MathUtils.damp(
-        redFrontLightRef.current.intensity,
-        visible ? 3.8 * finalLevel : 0,
-        14,
-        delta
-      );
+      redFrontLightRef.current.intensity = visible ? 3.8 * finalLevel : 0;
     }
 
     if (redTextSpillRef.current) {
-      redTextSpillRef.current.intensity = THREE.MathUtils.damp(
-        redTextSpillRef.current.intensity,
-        visible ? 2.75 * finalLevel : 0,
-        14,
-        delta
-      );
+      redTextSpillRef.current.intensity = visible ? 2.75 * finalLevel : 0;
     }
 
     if (redRoomFillRef.current) {
-      redRoomFillRef.current.intensity = THREE.MathUtils.damp(
-        redRoomFillRef.current.intensity,
-        visible ? 2.6 * finalLevel : 0,
-        14,
-        delta
-      );
+      redRoomFillRef.current.intensity = visible ? 2.6 * finalLevel : 0;
     }
 
     if (redUpperBounceRef.current) {
-      redUpperBounceRef.current.intensity = THREE.MathUtils.damp(
-        redUpperBounceRef.current.intensity,
-        visible ? 2.15 * finalLevel : 0,
-        14,
-        delta
-      );
+      redUpperBounceRef.current.intensity = visible ? 2.15 * finalLevel : 0;
     }
   });
 
@@ -1438,108 +1368,51 @@ function WallLamp() {
       };
     }, [lampSceneSource]);
 
-  useFrame((_, delta) => {
-    const cfg = WALL_LAMP_CONFIG;
-
+  useEffect(() => {
     if (wallGlowRef.current?.material) {
-      wallGlowRef.current.material.opacity = THREE.MathUtils.damp(
-        wallGlowRef.current.material.opacity,
-        0.42,
-        6,
-        delta
-      );
+      wallGlowRef.current.material.opacity = 0.42;
     }
 
     if (wallGlowOuterRef.current?.material) {
-      wallGlowOuterRef.current.material.opacity = THREE.MathUtils.damp(
-        wallGlowOuterRef.current.material.opacity,
-        0.22,
-        6,
-        delta
-      );
+      wallGlowOuterRef.current.material.opacity = 0.22;
     }
 
     if (innerGlowARef.current?.material) {
-      innerGlowARef.current.material.opacity = THREE.MathUtils.damp(
-        innerGlowARef.current.material.opacity,
-        1.18,
-        10,
-        delta
-      );
+      innerGlowARef.current.material.opacity = 1.18;
     }
 
     if (innerGlowBRef.current?.material) {
-      innerGlowBRef.current.material.opacity = THREE.MathUtils.damp(
-        innerGlowBRef.current.material.opacity,
-        1.0,
-        10,
-        delta
-      );
+      innerGlowBRef.current.material.opacity = 1.0;
     }
 
     if (innerGlowCRef.current?.material) {
-      innerGlowCRef.current.material.opacity = THREE.MathUtils.damp(
-        innerGlowCRef.current.material.opacity,
-        0.86,
-        10,
-        delta
-      );
+      innerGlowCRef.current.material.opacity = 0.86;
     }
 
     bulbMaterials.forEach((mat) => {
-      mat.emissiveIntensity = THREE.MathUtils.damp(
-        mat.emissiveIntensity,
-        52,
-        8,
-        delta
-      );
+      mat.emissiveIntensity = 52;
     });
 
     glassMaterials.forEach((mat) => {
-      mat.emissiveIntensity = THREE.MathUtils.damp(
-        mat.emissiveIntensity,
-        0.32,
-        7,
-        delta
-      );
+      mat.emissiveIntensity = 0.32;
     });
 
     if (bulbLightRef.current) {
-      bulbLightRef.current.intensity = THREE.MathUtils.damp(
-        bulbLightRef.current.intensity,
-        cfg.bulbIntensity,
-        5,
-        delta
-      );
+      bulbLightRef.current.intensity = WALL_LAMP_CONFIG.bulbIntensity;
     }
 
     if (bounceLightRef.current) {
-      bounceLightRef.current.intensity = THREE.MathUtils.damp(
-        bounceLightRef.current.intensity,
-        cfg.bounceIntensity,
-        5,
-        delta
-      );
+      bounceLightRef.current.intensity = WALL_LAMP_CONFIG.bounceIntensity;
     }
 
     if (fillLightRef.current) {
-      fillLightRef.current.intensity = THREE.MathUtils.damp(
-        fillLightRef.current.intensity,
-        cfg.fillIntensity,
-        5,
-        delta
-      );
+      fillLightRef.current.intensity = WALL_LAMP_CONFIG.fillIntensity;
     }
 
     if (bulbCoreLightRef.current) {
-      bulbCoreLightRef.current.intensity = THREE.MathUtils.damp(
-        bulbCoreLightRef.current.intensity,
-        24,
-        6,
-        delta
-      );
+      bulbCoreLightRef.current.intensity = 24;
     }
-  });
+  }, [bulbMaterials, glassMaterials]);
 
   const bulbPos = [bulbCenter.x, bulbCenter.y, bulbCenter.z];
 
@@ -1662,8 +1535,8 @@ function WallLamp() {
         distance={WALL_LAMP_CONFIG.bulbDistance}
         decay={WALL_LAMP_CONFIG.bulbDecay}
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        shadow-mapSize-width={512}
+        shadow-mapSize-height={512}
         shadow-bias={-0.00004}
         shadow-normalBias={0.02}
         shadow-radius={34}
@@ -1707,10 +1580,37 @@ function WallLamp() {
 }
 
 function getMeshWidth(ref) {
-  if (!ref.current) return 0;
-  ref.current.geometry.computeBoundingBox();
-  const box = ref.current.geometry.boundingBox;
+  if (!ref.current?.geometry) return 0;
+
+  const geometry = ref.current.geometry;
+  if (!geometry.boundingBox) {
+    geometry.computeBoundingBox();
+  }
+
+  const box = geometry.boundingBox;
   return box ? box.max.x - box.min.x : 0;
+}
+
+function getCachedTextBlockLayout(buildsRef, digitalRef, wordGap, globalOffsetX) {
+  if (textBlockLayoutCache) return textBlockLayoutCache;
+
+  const buildsWidth = getMeshWidth(buildsRef);
+  const digitalWidth = getMeshWidth(digitalRef);
+
+  if (!buildsWidth || !digitalWidth) return null;
+
+  const digitalX = -digitalWidth / 2;
+  const buildsX = digitalX - wordGap - buildsWidth;
+  const leftAlignedX = buildsX + globalOffsetX;
+
+  textBlockLayoutCache = {
+    dustinX: leftAlignedX,
+    buildsX: buildsX + globalOffsetX,
+    digitalX: digitalX + globalOffsetX,
+    expX: leftAlignedX,
+  };
+
+  return textBlockLayoutCache;
 }
 
 function TextBlock({ powerState, introProgress, pointer }) {
@@ -1722,13 +1622,15 @@ function TextBlock({ powerState, introProgress, pointer }) {
   const expRef = useRef(null);
   const digitalOverlayRef = useRef(null);
 
-  const [layoutReady, setLayoutReady] = useState(false);
-  const [positions, setPositions] = useState({
-    dustinX: -10,
-    buildsX: -10,
-    digitalX: -4,
-    expX: -10,
-  });
+  const [layoutReady, setLayoutReady] = useState(!!textBlockLayoutCache);
+  const [positions, setPositions] = useState(
+    textBlockLayoutCache || {
+      dustinX: -10,
+      buildsX: -10,
+      digitalX: -4,
+      expX: -10,
+    }
+  );
 
   const lineY1 = 1.72;
   const lineY2 = -0.18;
@@ -1754,25 +1656,36 @@ function TextBlock({ powerState, introProgress, pointer }) {
   );
 
   useLayoutEffect(() => {
-    const timer = window.setTimeout(() => {
-      const buildsWidth = getMeshWidth(buildsRef);
-      const digitalWidth = getMeshWidth(digitalRef);
-
-      const digitalX = -digitalWidth / 2;
-      const buildsX = digitalX - wordGap - buildsWidth;
-      const leftAlignedX = buildsX + globalOffsetX;
-
-      setPositions({
-        dustinX: leftAlignedX,
-        buildsX: buildsX + globalOffsetX,
-        digitalX: digitalX + globalOffsetX,
-        expX: leftAlignedX,
-      });
-
+    if (textBlockLayoutCache) {
+      setPositions(textBlockLayoutCache);
       setLayoutReady(true);
-    }, 0);
+      return;
+    }
 
-    return () => window.clearTimeout(timer);
+    let rafId = 0;
+
+    const measure = () => {
+      const next = getCachedTextBlockLayout(
+        buildsRef,
+        digitalRef,
+        wordGap,
+        globalOffsetX
+      );
+
+      if (next) {
+        setPositions(next);
+        setLayoutReady(true);
+        return;
+      }
+
+      rafId = window.requestAnimationFrame(measure);
+    };
+
+    measure();
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
   }, []);
 
   useFrame((_, delta) => {
@@ -1797,10 +1710,10 @@ function TextBlock({ powerState, introProgress, pointer }) {
       const lampOnDigital =
         powerState === "lamp"
           ? THREE.MathUtils.clamp(
-              1 - THREE.MathUtils.smoothstep(dist, 0.08, 0.62),
-              0,
-              1
-            )
+            1 - THREE.MathUtils.smoothstep(dist, 0.08, 0.62),
+            0,
+            1
+          )
           : 0;
 
       const targetOpacity = 1 - lampOnDigital;
@@ -1959,7 +1872,7 @@ function TextBlock({ powerState, introProgress, pointer }) {
   );
 }
 
-function PowerLights({ powerState, pointer, showArrow, arrowFlickerLevel }) {
+function PowerLights({ powerState, pointer, showArrow, arrowFlickerLevelRef }) {
   const { scene, gl } = useThree();
 
   const ambientRef = useRef(null);
@@ -1970,6 +1883,15 @@ function PowerLights({ powerState, pointer, showArrow, arrowFlickerLevel }) {
 
   const spotTarget = useMemo(() => new THREE.Object3D(), []);
   const edgeTarget = useMemo(() => new THREE.Object3D(), []);
+
+  const lastShadowSampleRef = useRef({
+    lampX: null,
+    lampY: null,
+    targetX: null,
+    targetY: null,
+    powerState: null,
+    dirtyFrames: 3,
+  });
 
   useEffect(() => {
     scene.add(spotTarget);
@@ -1985,16 +1907,31 @@ function PowerLights({ powerState, pointer, showArrow, arrowFlickerLevel }) {
     if (neonEdgeRef.current) neonEdgeRef.current.target = edgeTarget;
   }, [spotTarget, edgeTarget]);
 
+  useEffect(() => {
+    lastShadowSampleRef.current.dirtyFrames = 3;
+    lastShadowSampleRef.current.powerState = null;
+  }, [powerState]);
+
+  useEffect(() => {
+    if (ambientRef.current) {
+      if (powerState === "intro") ambientRef.current.intensity = 0.2;
+      else if (powerState === "lamp") ambientRef.current.intensity = 0.028;
+      else if (powerState !== "flicker") ambientRef.current.intensity = 0.14;
+    }
+
+    if (wallWashRef.current) {
+      if (powerState === "intro") wallWashRef.current.intensity = 0.95;
+      else if (powerState === "lamp") wallWashRef.current.intensity = 0.055;
+      else if (powerState !== "flicker") wallWashRef.current.intensity = 0.7;
+    }
+  }, [powerState]);
+
   useFrame((state, delta) => {
     const t = state.clock.getElapsedTime();
 
-    if (ambientRef.current) {
-      let ambient = 0.14;
-
-      if (powerState === "intro") ambient = 0.2;
-
-      if (powerState === "flicker") {
-        ambient =
+    if (powerState === "flicker") {
+      if (ambientRef.current) {
+        ambientRef.current.intensity =
           Math.sin(t * 28) > 0.32
             ? 0.13
             : Math.sin(t * 16) > -0.1
@@ -2002,106 +1939,111 @@ function PowerLights({ powerState, pointer, showArrow, arrowFlickerLevel }) {
               : 0.015;
       }
 
-      if (powerState === "lamp") ambient = 0.028;
-
-      ambientRef.current.intensity = ambient;
-    }
-
-    if (wallWashRef.current) {
-      let fill = 0.7;
-
-      if (powerState === "intro") fill = 0.95;
-
-      if (powerState === "flicker") {
-        fill =
+      if (wallWashRef.current) {
+        wallWashRef.current.intensity =
           Math.sin(t * 22) > 0.28
             ? 0.62
             : Math.sin(t * 13) > -0.06
               ? 0.22
               : 0.04;
       }
-
-      if (powerState === "lamp") fill = 0.055;
-
-      wallWashRef.current.intensity = fill;
-    }
-
-    if (spotRef.current) {
-      const targetX = THREE.MathUtils.clamp(pointer.x * 13.5, -13.5, 13.5);
-      const targetY = THREE.MathUtils.clamp(pointer.y * 6.5, -6.5, 6.5);
-
-      const lampX = THREE.MathUtils.clamp(pointer.x * 1.8, -1.8, 1.8);
-      const lampY = THREE.MathUtils.clamp(pointer.y * 1.2, -1.2, 1.2) + 0.35;
-
-      spotTarget.position.x = THREE.MathUtils.damp(
-        spotTarget.position.x,
-        targetX,
-        10,
-        delta
-      );
-      spotTarget.position.y = THREE.MathUtils.damp(
-        spotTarget.position.y,
-        targetY,
-        10,
-        delta
-      );
-      spotTarget.position.z = -12.75;
-      spotTarget.updateMatrixWorld(true);
-
-      spotRef.current.position.x = THREE.MathUtils.damp(
-        spotRef.current.position.x,
-        lampX,
-        10,
-        delta
-      );
-      spotRef.current.position.y = THREE.MathUtils.damp(
-        spotRef.current.position.y,
-        lampY,
-        10,
-        delta
-      );
-      spotRef.current.position.z = 11.8;
-
-      spotRef.current.target = spotTarget;
-      spotRef.current.intensity = powerState === "lamp" ? 980 : 0;
-      spotRef.current.angle = 0.28;
-      spotRef.current.penumbra = 1;
-      spotRef.current.distance = 98;
-      spotRef.current.decay = 1;
-
-      spotRef.current.shadow.camera.near = 6;
-      spotRef.current.shadow.camera.far = 42;
-      spotRef.current.shadow.focus = 1;
-      spotRef.current.shadow.bias = -0.00012;
-      spotRef.current.shadow.normalBias = 0.02;
-      spotRef.current.shadow.radius = 3.2;
-      spotRef.current.shadow.needsUpdate = true;
-      spotRef.current.shadow.camera.updateProjectionMatrix();
-
-      gl.shadowMap.needsUpdate = true;
     }
 
     edgeTarget.position.set(-1.8, -0.35, -1.2);
     edgeTarget.updateMatrixWorld(true);
 
+    const arrowLevel = showArrow
+      ? THREE.MathUtils.clamp(arrowFlickerLevelRef?.current ?? 0, 0, 1)
+      : 0;
+
     if (neonBounceRef.current) {
-      const target = showArrow ? 2.1 : 0;
-      neonBounceRef.current.intensity = THREE.MathUtils.damp(
-        neonBounceRef.current.intensity,
-        target,
-        8,
-        delta
-      );
+      neonBounceRef.current.intensity = 2.1 * arrowLevel;
     }
 
     if (neonEdgeRef.current) {
-      const target = showArrow ? 180 : 0;
-      neonEdgeRef.current.intensity = THREE.MathUtils.damp(
-        neonEdgeRef.current.intensity,
-        target,
-        8,
-        delta
-      );
+      neonEdgeRef.current.intensity = 180 * arrowLevel;
+    }
+
+    if (!spotRef.current) return;
+
+    if (powerState !== "lamp") {
+      if (spotRef.current.intensity !== 0) {
+        spotRef.current.intensity = 0;
+      }
+      return;
+    }
+
+    const targetX = THREE.MathUtils.clamp(pointer.x * 13.5, -13.5, 13.5);
+    const targetY = THREE.MathUtils.clamp(pointer.y * 6.5, -6.5, 6.5);
+
+    const lampX = THREE.MathUtils.clamp(pointer.x * 1.8, -1.8, 1.8);
+    const lampY = THREE.MathUtils.clamp(pointer.y * 1.2, -1.2, 1.2) + 0.35;
+
+    spotTarget.position.x = THREE.MathUtils.damp(
+      spotTarget.position.x,
+      targetX,
+      10,
+      delta
+    );
+    spotTarget.position.y = THREE.MathUtils.damp(
+      spotTarget.position.y,
+      targetY,
+      10,
+      delta
+    );
+    spotTarget.position.z = -12.75;
+    spotTarget.updateMatrixWorld(true);
+
+    spotRef.current.position.x = THREE.MathUtils.damp(
+      spotRef.current.position.x,
+      lampX,
+      10,
+      delta
+    );
+    spotRef.current.position.y = THREE.MathUtils.damp(
+      spotRef.current.position.y,
+      lampY,
+      10,
+      delta
+    );
+    spotRef.current.position.z = 11.8;
+
+    spotRef.current.target = spotTarget;
+    spotRef.current.intensity = 980;
+    spotRef.current.angle = 0.28;
+    spotRef.current.penumbra = 1;
+    spotRef.current.distance = 98;
+    spotRef.current.decay = 1.15;
+
+    spotRef.current.shadow.camera.near = 6;
+    spotRef.current.shadow.camera.far = 42;
+    spotRef.current.shadow.focus = 1;
+    spotRef.current.shadow.bias = -0.00012;
+    spotRef.current.shadow.normalBias = 0.02;
+    spotRef.current.shadow.radius = 3.2;
+
+    const last = lastShadowSampleRef.current;
+    const movedEnough =
+      last.lampX === null ||
+      Math.abs(spotRef.current.position.x - last.lampX) > 0.015 ||
+      Math.abs(spotRef.current.position.y - last.lampY) > 0.015 ||
+      Math.abs(spotTarget.position.x - last.targetX) > 0.03 ||
+      Math.abs(spotTarget.position.y - last.targetY) > 0.03;
+
+    const powerChanged = last.powerState !== powerState;
+    const needsForcedUpdate = last.dirtyFrames > 0;
+
+    if (movedEnough || powerChanged || needsForcedUpdate) {
+      spotRef.current.shadow.needsUpdate = true;
+      spotRef.current.shadow.camera.updateProjectionMatrix();
+      gl.shadowMap.needsUpdate = true;
+
+      last.lampX = spotRef.current.position.x;
+      last.lampY = spotRef.current.position.y;
+      last.targetX = spotTarget.position.x;
+      last.targetY = spotTarget.position.y;
+      last.powerState = powerState;
+      last.dirtyFrames = Math.max(0, last.dirtyFrames - 1);
     }
   });
 
@@ -2141,7 +2083,7 @@ function PowerLights({ powerState, pointer, showArrow, arrowFlickerLevel }) {
       <spotLight
         ref={spotRef}
         position={[0, 0.35, 11.8]}
-        color="#fff6e8"
+        color="#ffd09a"
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
@@ -2152,12 +2094,51 @@ function PowerLights({ powerState, pointer, showArrow, arrowFlickerLevel }) {
   );
 }
 
+function SceneWarmup() {
+  const { gl, scene, camera, invalidate } = useThree();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const warmup = async () => {
+      try {
+        if (typeof gl.compileAsync === "function") {
+          await gl.compileAsync(scene, camera);
+        } else if (typeof gl.compile === "function") {
+          gl.compile(scene, camera);
+        }
+
+        if (cancelled) return;
+
+        gl.shadowMap.needsUpdate = true;
+        invalidate();
+
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          gl.shadowMap.needsUpdate = true;
+          invalidate();
+        });
+      } catch (err) {
+        console.warn("Scene warmup failed:", err);
+      }
+    };
+
+    warmup();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gl, scene, camera, invalidate]);
+
+  return null;
+}
+
 function Scene({
   powerState,
   pointer,
   introProgress,
   showArrow,
-  arrowFlickerLevel,
+  arrowFlickerLevelRef,
 }) {
   return (
     <>
@@ -2167,13 +2148,16 @@ function Scene({
       <Floor />
       <SoftBeamWall pointer={pointer} powerState={powerState} />
       <SoftBeamFloor pointer={pointer} powerState={powerState} />
-      <NeonArrowSign visible={showArrow} />
+      <NeonArrowSign
+        visible={showArrow}
+        arrowFlickerLevelRef={arrowFlickerLevelRef}
+      />
       <WallLamp />
       <PowerLights
         powerState={powerState}
         pointer={pointer}
         showArrow={showArrow}
-        arrowFlickerLevel={arrowFlickerLevel}
+        arrowFlickerLevelRef={arrowFlickerLevelRef}
       />
       <TextBlock
         powerState={powerState}
@@ -2186,6 +2170,8 @@ function Scene({
 
 export default function HeroSection() {
   const sectionRef = useRef(null);
+  const arrowFlickerLevelRef = useRef(0);
+
   const [powerState, setPowerState] = useState("intro");
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const [introProgress, setIntroProgress] = useState(0);
@@ -2282,7 +2268,10 @@ export default function HeroSection() {
                 pointer={pointer}
                 introProgress={introProgress}
                 showArrow={showArrow}
+                arrowFlickerLevelRef={arrowFlickerLevelRef}
               />
+              <SceneWarmup />
+              <Preload all />
             </Suspense>
           </Canvas>
         </HeroCanvasErrorBoundary>
@@ -2304,6 +2293,7 @@ export default function HeroSection() {
   );
 }
 
+useFont.preload(FONT_URL);
 useGLTF.preload(SIGN_URL);
 useGLTF.preload(LAMP_WALL_URL);
 useTexture.preload(BRICKS_WALL_URL);
