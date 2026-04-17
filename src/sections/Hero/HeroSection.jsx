@@ -535,12 +535,12 @@ function BrickMaterial({
       ref={materialRef}
       map={textures?.colorMap || null}
       bumpMap={textures?.bumpMap || null}
-      bumpScale={0.03}
+      bumpScale={0.022}
       displacementMap={textures?.displacementMap || null}
-      displacementScale={0.12}
-      displacementBias={-0.055}
+      displacementScale={0.08}
+      displacementBias={-0.04}
       normalMap={textures?.normalMap || null}
-      normalScale={new THREE.Vector2(0.32, 0.32)}
+      normalScale={new THREE.Vector2(0.24, 0.24)}
       roughnessMap={textures?.roughnessMap || null}
       color={color}
       roughness={0.82}
@@ -557,7 +557,7 @@ function BackWall({ powerState }) {
 
   return (
     <mesh position={[0, 0.15, -12.8]} receiveShadow castShadow>
-      <planeGeometry args={[34, 18, 220, 120]} />
+      <planeGeometry args={[34, 18, 140, 80]} />
       <BrickMaterial
         powerState={powerState}
         textures={textures}
@@ -617,7 +617,7 @@ function SideWalls({ powerState }) {
         receiveShadow
         castShadow
       >
-        <planeGeometry args={[18.6, 18, 140, 120]} />
+        <planeGeometry args={[18.6, 18, 90, 80]} />
         <meshStandardMaterial
           ref={leftRef}
           map={leftTextures.colorMap}
@@ -644,7 +644,7 @@ function SideWalls({ powerState }) {
         receiveShadow
         castShadow
       >
-        <planeGeometry args={[18.6, 18, 140, 120]} />
+        <planeGeometry args={[18.6, 18, 90, 80]} />
         <meshStandardMaterial
           ref={rightRef}
           map={rightTextures.colorMap}
@@ -2085,8 +2085,8 @@ function PowerLights({ powerState, pointer, showArrow, arrowFlickerLevelRef }) {
         position={[0, 0.35, 11.8]}
         color="#ffd09a"
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        shadow-mapSize-width={512}
+        shadow-mapSize-height={512}
         shadow-bias={-0.00012}
         shadow-normalBias={0.02}
       />
@@ -2255,7 +2255,7 @@ export default function HeroSection() {
           <Canvas
             shadows
             camera={{ position: [0, 0, 18], fov: 36 }}
-            dpr={[1, 1.8]}
+            dpr={[1, 1.25]}
             gl={{
               antialias: true,
               physicallyCorrectLights: true,
