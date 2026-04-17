@@ -47,6 +47,14 @@ const WALL_LAMP_CONFIG = {
   glowInnerOpacity: 0.34,
   glowOuterOpacity: 0.16,
 
+  textSpotPosition: [-15.9, 1.55, -8.18],
+  textSpotTarget: [-6.4, -0.55, -12.55],
+  textSpotIntensity: 235,
+  textSpotAngle: 0.5,
+  textSpotPenumbra: 0.92,
+  textSpotDistance: 34,
+  textSpotDecay: 1.28,
+
   showLightHelper: false,
   helperSize: 0.02,
 };
@@ -1705,13 +1713,14 @@ function getMeshWidth(ref) {
   return box ? box.max.x - box.min.x : 0;
 }
 
-function TextBlock({ powerState, introProgress }) {
+function TextBlock({ powerState, introProgress, pointer }) {
   const rootRef = useRef(null);
 
   const dustinRef = useRef(null);
   const buildsRef = useRef(null);
   const digitalRef = useRef(null);
   const expRef = useRef(null);
+  const digitalOverlayRef = useRef(null);
 
   const [layoutReady, setLayoutReady] = useState(false);
   const [positions, setPositions] = useState({
@@ -1776,6 +1785,33 @@ function TextBlock({ powerState, introProgress }) {
       10,
       delta
     );
+
+    if (digitalOverlayRef.current?.material) {
+      const spotCenterX = -0.22;
+      const spotCenterY = 0.03;
+
+      const dx = pointer.x - spotCenterX;
+      const dy = pointer.y - spotCenterY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      const lampOnDigital =
+        powerState === "lamp"
+          ? THREE.MathUtils.clamp(
+              1 - THREE.MathUtils.smoothstep(dist, 0.08, 0.62),
+              0,
+              1
+            )
+          : 0;
+
+      const targetOpacity = 1 - lampOnDigital;
+
+      digitalOverlayRef.current.material.opacity = THREE.MathUtils.damp(
+        digitalOverlayRef.current.material.opacity,
+        targetOpacity,
+        8,
+        delta
+      );
+    }
   });
 
   return (
@@ -1858,6 +1894,38 @@ function TextBlock({ powerState, introProgress }) {
             clearcoat={1}
             clearcoatRoughness={0.04}
             reflectivity={1}
+          />
+        </Text3D>
+
+        <Text3D
+          ref={digitalOverlayRef}
+          position={[0, 0, 0.485]}
+          font={FONT_URL}
+          size={1.02}
+          height={0.002}
+          curveSegments={8}
+          bevelEnabled={false}
+          scale={[1.08, 1, 1]}
+          castShadow={false}
+          receiveShadow={true}
+          renderOrder={4}
+        >
+          digital
+          <meshPhysicalMaterial
+            color="#00d8ff"
+            emissive="#00d8ff"
+            emissiveIntensity={0.08}
+            roughness={0.32}
+            metalness={0.02}
+            clearcoat={1}
+            clearcoatRoughness={0.05}
+            reflectivity={1}
+            transparent
+            opacity={1}
+            depthWrite={false}
+            polygonOffset
+            polygonOffsetFactor={-4}
+            polygonOffsetUnits={-4}
           />
         </Text3D>
       </group>
@@ -2107,7 +2175,11 @@ function Scene({
         showArrow={showArrow}
         arrowFlickerLevel={arrowFlickerLevel}
       />
-      <TextBlock powerState={powerState} introProgress={introProgress} />
+      <TextBlock
+        powerState={powerState}
+        introProgress={introProgress}
+        pointer={pointer}
+      />
     </>
   );
 }
