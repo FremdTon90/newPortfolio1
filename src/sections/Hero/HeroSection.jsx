@@ -799,6 +799,115 @@ function SoftBeamFloor({ pointer, powerState }) {
   );
 }
 
+function createHorrorNeonFlickerController() {
+  return {
+    mode: "burst-off",
+    timer: 0.035,
+    burstRemaining: 4,
+    currentLevel: 0.18,
+    targetLevel: 0.02,
+    hardDropChance: 0.12,
+  };
+}
+
+function updateHorrorNeonFlicker(controller, delta, visible) {
+  if (!visible) {
+    controller.mode = "off";
+    controller.timer = 0;
+    controller.burstRemaining = 0;
+    controller.currentLevel = 0;
+    controller.targetLevel = 0;
+    return 0;
+  }
+
+  controller.timer -= delta;
+
+  if (controller.timer <= 0) {
+    switch (controller.mode) {
+      case "off":
+        controller.mode = "burst-off";
+        controller.burstRemaining = 3 + Math.floor(Math.random() * 3); // 3 - 5
+        controller.targetLevel = 0.02 + Math.random() * 0.03;
+        controller.timer = 0.02 + Math.random() * 0.03; // 20ms - 50ms
+        break;
+
+      case "stable": {
+        const shouldHardDrop = Math.random() < controller.hardDropChance;
+
+        if (shouldHardDrop) {
+          controller.mode = "hard-off";
+          controller.targetLevel = 0.015 + Math.random() * 0.025;
+          controller.timer = 0.05 + Math.random() * 0.08; // 50ms - 130ms
+        } else {
+          controller.mode = "burst-off";
+          controller.burstRemaining = 3 + Math.floor(Math.random() * 3); // 3 - 5
+          controller.targetLevel = Math.random() < 0.84 ? 0.02 : 0.12;
+          controller.timer = 0.018 + Math.random() * 0.03; // 18ms - 48ms
+        }
+        break;
+      }
+
+      case "hard-off":
+        controller.mode = "reignite";
+        controller.targetLevel = 0.55 + Math.random() * 0.2; // 0.55 - 0.75
+        controller.timer = 0.03 + Math.random() * 0.045; // 30ms - 75ms
+        break;
+
+      case "reignite":
+        controller.mode = "stable";
+        controller.targetLevel = 0.95 + Math.random() * 0.05; // 0.95 - 1.00
+        controller.timer = 1.8 + Math.random() * 2.8; // 1.8s - 4.6s
+        break;
+
+      case "burst-off":
+        controller.mode = "burst-on";
+        controller.targetLevel = 0.48 + Math.random() * 0.42; // 0.48 - 0.90
+        controller.timer = 0.022 + Math.random() * 0.04; // 22ms - 62ms
+        break;
+
+      case "burst-on":
+        controller.burstRemaining -= 1;
+
+        if (controller.burstRemaining > 0) {
+          controller.mode = "burst-off";
+          controller.targetLevel = Math.random() < 0.86 ? 0.02 : 0.1;
+          controller.timer = 0.016 + Math.random() * 0.035; // 16ms - 51ms
+        } else {
+          const shakyRecovery = Math.random() < 0.38;
+
+          if (shakyRecovery) {
+            controller.mode = "reignite";
+            controller.targetLevel = 0.62 + Math.random() * 0.14;
+            controller.timer = 0.028 + Math.random() * 0.04; // 28ms - 68ms
+          } else {
+            controller.mode = "stable";
+            controller.targetLevel = 0.96 + Math.random() * 0.04;
+            controller.timer = 2.0 + Math.random() * 3.4; // 2.0s - 5.4s
+          }
+        }
+        break;
+
+      default:
+        controller.mode = "stable";
+        controller.targetLevel = 1;
+        controller.timer = 2.2 + Math.random() * 2.6;
+        break;
+    }
+  }
+
+  const dampSpeed =
+    controller.targetLevel < controller.currentLevel ? 42 : 24;
+
+  controller.currentLevel = THREE.MathUtils.damp(
+    controller.currentLevel,
+    controller.targetLevel,
+    dampSpeed,
+    delta
+  );
+
+  return controller.currentLevel;
+}
+
 function NeonArrowSign({ visible }) {
   const rootRef = useRef(null);
   const signRef = useRef(null);
@@ -812,6 +921,8 @@ function NeonArrowSign({ visible }) {
   const redTextSpillRef = useRef(null);
   const redRoomFillRef = useRef(null);
   const redUpperBounceRef = useRef(null);
+
+  const flickerControllerRef = useRef(createHorrorNeonFlickerController());
 
   const { scene } = useGLTF(SIGN_URL);
   const glowTexture = useMemo(() => createGlowTexture(), []);
@@ -911,8 +1022,19 @@ function NeonArrowSign({ visible }) {
     if (!rootRef.current) return;
 
     const t = state.clock.getElapsedTime();
-    const flicker =
-      visible && t < 2.2 ? (Math.sin(t * 40) > 0.08 ? 1 : 0.9) : 1;
+    const flickerLevel = updateHorrorNeonFlicker(
+      flickerControllerRef.current,
+      delta,
+      visible
+    );
+
+    // Minimales Micro-Jitter, damit es nicht digital-perfekt aussieht
+    const microJitter =
+      visible && flickerLevel > 0.75
+        ? 0.97 + Math.sin(t * 19.7) * 0.015 + Math.sin(t * 33.1) * 0.01
+        : 1;
+
+    const finalLevel = flickerLevel * microJitter;
 
     rootRef.current.position.y = THREE.MathUtils.damp(
       rootRef.current.position.y,
@@ -965,11 +1087,14 @@ function NeonArrowSign({ visible }) {
               mat.emissive.r > mat.emissive.g * 1.08 &&
               mat.emissive.r > mat.emissive.b * 1.08;
 
-            const baseTarget = isRedish ? 12.8 * flicker : 0.45;
+            const baseTarget = isRedish
+              ? 12.8 * finalLevel
+              : 0.18 + 0.27 * finalLevel;
+
             mat.emissiveIntensity = THREE.MathUtils.damp(
               mat.emissiveIntensity ?? 0,
               visible ? baseTarget : 0,
-              8,
+              14,
               delta
             );
           }
@@ -980,8 +1105,8 @@ function NeonArrowSign({ visible }) {
     if (wallGlowRef.current?.material) {
       wallGlowRef.current.material.opacity = THREE.MathUtils.damp(
         wallGlowRef.current.material.opacity,
-        visible ? 0.62 * flicker : 0,
-        8,
+        visible ? 0.62 * finalLevel : 0,
+        14,
         delta
       );
     }
@@ -989,8 +1114,8 @@ function NeonArrowSign({ visible }) {
     if (wallGlowOuterRef.current?.material) {
       wallGlowOuterRef.current.material.opacity = THREE.MathUtils.damp(
         wallGlowOuterRef.current.material.opacity,
-        visible ? 0.28 * flicker : 0,
-        8,
+        visible ? 0.28 * finalLevel : 0,
+        14,
         delta
       );
     }
@@ -998,8 +1123,8 @@ function NeonArrowSign({ visible }) {
     if (floorGlowRef.current?.material) {
       floorGlowRef.current.material.opacity = THREE.MathUtils.damp(
         floorGlowRef.current.material.opacity,
-        visible ? 0.22 * flicker : 0,
-        8,
+        visible ? 0.22 * finalLevel : 0,
+        14,
         delta
       );
     }
@@ -1007,8 +1132,8 @@ function NeonArrowSign({ visible }) {
     if (redWallLightRef.current) {
       redWallLightRef.current.intensity = THREE.MathUtils.damp(
         redWallLightRef.current.intensity,
-        visible ? 8.8 * flicker : 0,
-        8,
+        visible ? 8.8 * finalLevel : 0,
+        14,
         delta
       );
     }
@@ -1016,8 +1141,8 @@ function NeonArrowSign({ visible }) {
     if (redFloorLightRef.current) {
       redFloorLightRef.current.intensity = THREE.MathUtils.damp(
         redFloorLightRef.current.intensity,
-        visible ? 6.6 * flicker : 0,
-        8,
+        visible ? 6.6 * finalLevel : 0,
+        14,
         delta
       );
     }
@@ -1025,8 +1150,8 @@ function NeonArrowSign({ visible }) {
     if (redFrontLightRef.current) {
       redFrontLightRef.current.intensity = THREE.MathUtils.damp(
         redFrontLightRef.current.intensity,
-        visible ? 3.8 * flicker : 0,
-        8,
+        visible ? 3.8 * finalLevel : 0,
+        14,
         delta
       );
     }
@@ -1034,8 +1159,8 @@ function NeonArrowSign({ visible }) {
     if (redTextSpillRef.current) {
       redTextSpillRef.current.intensity = THREE.MathUtils.damp(
         redTextSpillRef.current.intensity,
-        visible ? 2.75 * flicker : 0,
-        8,
+        visible ? 2.75 * finalLevel : 0,
+        14,
         delta
       );
     }
@@ -1043,8 +1168,8 @@ function NeonArrowSign({ visible }) {
     if (redRoomFillRef.current) {
       redRoomFillRef.current.intensity = THREE.MathUtils.damp(
         redRoomFillRef.current.intensity,
-        visible ? 2.6 * flicker : 0,
-        8,
+        visible ? 2.6 * finalLevel : 0,
+        14,
         delta
       );
     }
@@ -1052,8 +1177,8 @@ function NeonArrowSign({ visible }) {
     if (redUpperBounceRef.current) {
       redUpperBounceRef.current.intensity = THREE.MathUtils.damp(
         redUpperBounceRef.current.intensity,
-        visible ? 2.15 * flicker : 0,
-        8,
+        visible ? 2.15 * finalLevel : 0,
+        14,
         delta
       );
     }
@@ -1600,6 +1725,7 @@ function TextBlock({ powerState, introProgress }) {
   const lineY2 = -0.18;
   const lineY3 = -1.95;
   const wordGap = 0.46;
+  const globalOffsetX = -1.8;
 
   const baseColor = powerState === "lamp" ? "#f1f1f1" : "#e2e8f4";
   const accentColor = powerState === "lamp" ? "#66dff0" : "#9bf6ff";
@@ -1625,12 +1751,12 @@ function TextBlock({ powerState, introProgress }) {
 
       const digitalX = -digitalWidth / 2;
       const buildsX = digitalX - wordGap - buildsWidth;
-      const leftAlignedX = buildsX;
+      const leftAlignedX = buildsX + globalOffsetX;
 
       setPositions({
         dustinX: leftAlignedX,
-        buildsX,
-        digitalX,
+        buildsX: buildsX + globalOffsetX,
+        digitalX: digitalX + globalOffsetX,
         expX: leftAlignedX,
       });
 
@@ -1660,12 +1786,12 @@ function TextBlock({ powerState, introProgress }) {
           font={FONT_URL}
           size={1.18}
           height={0.51}
-          curveSegments={10}
+          curveSegments={8}
           bevelEnabled
           bevelThickness={0.022}
           bevelSize={0.02}
           bevelOffset={0}
-          bevelSegments={5}
+          bevelSegments={1}
           scale={[1.08, 1, 1]}
           castShadow
           receiveShadow
@@ -1686,12 +1812,12 @@ function TextBlock({ powerState, introProgress }) {
           font={FONT_URL}
           size={1.02}
           height={0.45}
-          curveSegments={10}
+          curveSegments={8}
           bevelEnabled
           bevelThickness={0.02}
           bevelSize={0.017}
           bevelOffset={0}
-          bevelSegments={5}
+          bevelSegments={1}
           scale={[1.08, 1, 1]}
           castShadow
           receiveShadow
@@ -1712,12 +1838,12 @@ function TextBlock({ powerState, introProgress }) {
           font={FONT_URL}
           size={1.02}
           height={0.45}
-          curveSegments={10}
+          curveSegments={8}
           bevelEnabled
           bevelThickness={0.02}
           bevelSize={0.017}
           bevelOffset={0}
-          bevelSegments={5}
+          bevelSegments={1}
           scale={[1.08, 1, 1]}
           castShadow
           receiveShadow
@@ -1742,12 +1868,12 @@ function TextBlock({ powerState, introProgress }) {
           font={FONT_URL}
           size={1.18}
           height={0.51}
-          curveSegments={10}
+          curveSegments={8}
           bevelEnabled
           bevelThickness={0.022}
           bevelSize={0.02}
           bevelOffset={0}
-          bevelSegments={5}
+          bevelSegments={1}
           scale={[1.08, 1, 1]}
           castShadow
           receiveShadow
@@ -1765,7 +1891,7 @@ function TextBlock({ powerState, introProgress }) {
   );
 }
 
-function PowerLights({ powerState, pointer, showArrow }) {
+function PowerLights({ powerState, pointer, showArrow, arrowFlickerLevel }) {
   const { scene, gl } = useThree();
 
   const ambientRef = useRef(null);
@@ -1949,8 +2075,8 @@ function PowerLights({ powerState, pointer, showArrow }) {
         position={[0, 0.35, 11.8]}
         color="#fff6e8"
         castShadow
-        shadow-mapSize-width={4096}
-        shadow-mapSize-height={4096}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
         shadow-bias={-0.00012}
         shadow-normalBias={0.02}
       />
@@ -1958,7 +2084,13 @@ function PowerLights({ powerState, pointer, showArrow }) {
   );
 }
 
-function Scene({ powerState, pointer, introProgress, showArrow }) {
+function Scene({
+  powerState,
+  pointer,
+  introProgress,
+  showArrow,
+  arrowFlickerLevel,
+}) {
   return (
     <>
       <fog attach="fog" args={["#02050b", 11, 44]} />
@@ -1973,6 +2105,7 @@ function Scene({ powerState, pointer, introProgress, showArrow }) {
         powerState={powerState}
         pointer={pointer}
         showArrow={showArrow}
+        arrowFlickerLevel={arrowFlickerLevel}
       />
       <TextBlock powerState={powerState} introProgress={introProgress} />
     </>
